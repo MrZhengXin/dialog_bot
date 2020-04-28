@@ -3,6 +3,22 @@ import nltk
 import regex
 import re
 import datetime
+import argparse
+
+parser = argparse.ArgumentParser(description='input delimiter. [ks]xxx[ks]xxx[ke]xxx[gs]xxx[gs]')
+parser.add_argument('--knowledge_sep', type=str, default='\t')
+parser.add_argument('--knowledge_end', type=str, default='\t')
+parser.add_argument('--goal_stage_sep', type=str, default='\t')
+parser.add_argument('--bot_in_history', type=bool, default=True, help='whether bot response appear in history')
+parser.add_argument('--force_history', type=bool, default=False, help='normally if knowledges were found, no history \
+would needed')
+parser.add_argument('--max_history_length', type=int, default=128)
+parser.add_argument('--max_goal_stage_in_history', type=int, default=2)
+parser.add_argument('--train_json', type=str, default='train.json')
+parser.add_argument('--train_source_file', type=str, default='gpt2_train.src')
+parser.add_argument('--train_target_file', type=str, default='gpt2_train.tgt')
+
+args = parser.parse_args()
 
 
 eq_relations = {
@@ -71,11 +87,11 @@ def cal_score(triple, q, a):
     return score
 
 
-with open('train.json', 'r') as f:
+with open(args.train_json, 'r') as f:
     x = f.readlines()
 
-src = open('train_with_knowledge.src', 'w')
-tgt = open('train_with_knowledge.tgt', 'w')
+src = open(args.train_source_file, 'w')
+tgt = open(args.train_target_file, 'w')
 len_src = 0
 len_tgt = 0
 
@@ -137,7 +153,8 @@ for i in x:
             hello_info.append(i['user_profile']['性别'])
             if '年龄区间' in str(i['user_profile']):
                 hello_info.append(i['user_profile']['年龄区间'])
-        print(hello_info, file=src)
+        print(*hello_info, file=src, sep=args.knowledge_sep, end='')
+        print(args.knowledge_end, file=src)
         len_src += 1
 
     # add reverse knowledge
@@ -169,8 +186,10 @@ for i in x:
 
     used_k = set()  # used string-format knowledge tuple in previous conversation
 
+    goal_stage_milestone = set()
     for j in range(len(conversation)-1):
         if conversation[j][0] == '[':
+            goal_stage_milestone.add(j)
             conversation[j] = conversation[j][4:]
         using_k = set()  # bot need these knowledge tuples to answer
         user_round = user_first ^ (j & 1)  # True if it were user speaking
@@ -201,15 +220,23 @@ for i in x:
 
         if user_round:
             if len(using_k) != 0:
-                print(*using_k, end='\t', file=src)  # knowledge at the beginning of user question
-            elif 0 < j < len(conversation) - 2:  # say good bye need not history information
-                add_history = ''
+                print(*using_k, sep=args.knowledge_sep, end='', file=src)  # knowledge at the beginning of user question
+            print(args.knowledge_end, end='', file=src)
+            if 0 < j < len(conversation) - 2 and (len(using_k) == 0 or args.force_history):  # say good bye need not history information
+                add_history = []
                 pos_h = j - 1
-                while len(add_history + conversation[pos_h]) < 128 and pos_h >= 0:
-                    add_history += conversation[pos_h].strip() + ' '
+                delta_goal_stage = 0
+                while len(' '.join(add_history) + conversation[pos_h]) < args.max_history_length and pos_h >= 0:
+                    add_history.append(conversation[pos_h].strip())
                     pos_h -= 1
-                print(add_history, end='\t', file=src)
-        print(conversation[j], file=src if user_round else tgt)
+                    if pos_h in goal_stage_milestone:
+                        add_history[-1] += args.goal_stage_sep
+                        delta_goal_stage += 1
+                        if delta_goal_stage >= args.max_goal_stage_in_history:
+                            break
+
+                print(*add_history, sep='\t', end='\t', file=src)
+        print(conversation[j] + args.goal_stage_sep, file=src if user_round else tgt)
         if user_round:
             len_src += 1
         else:
