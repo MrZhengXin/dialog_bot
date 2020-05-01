@@ -9,7 +9,7 @@ from tqdm import tqdm
 from goal.model.next_goal_type.astar import AStarType
 from goal.model.next_goal_type.config import Config
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 
 class GoalTypeDataset(Dataset):

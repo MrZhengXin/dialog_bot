@@ -13,7 +13,7 @@ class Config:
         self.batch_size = 128
         self.lr = 1e-3
         self.weight_decay = 0
-        self.max_norm = 2
+        self.max_norm = 1
         self.num_epoch = 50
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.save_path = "../../output/goal_finish.pt"

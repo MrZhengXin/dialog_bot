@@ -10,7 +10,7 @@ from goal.model.next_goal_entity.astar import AStarEntity
 from goal.model.next_goal_entity.config import Config
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 
 class GoalEntityDataset(Dataset):
@@ -19,7 +19,9 @@ class GoalEntityDataset(Dataset):
         self.past_entity_seq = self.file_reader(path_prefix + tag + "_next_goal_entity.txt")
         self.cur_entity = [entity_seq[-1] for entity_seq in self.past_entity_seq]
         self.final_entity_type = self.file_reader(path_prefix + tag + "_final_goal_entity.txt")
+        # self.utt = self.file_reader(path_prefix + tag + "_binary_utterance.txt")
         self.label = self.file_reader(path_prefix + tag + "_next_goal_entity_label.txt")
+        # print(len(self.past_entity_seq), len(self.utt))
 
     def file_reader(self, file_path):
         with open(file_path, "r", encoding='utf-8') as f:
@@ -28,6 +30,7 @@ class GoalEntityDataset(Dataset):
 
     def __getitem__(self, i):
         return self.past_entity_seq[i], self.cur_entity[i], self.final_entity_type[i], self.label[i]
+        # return self.past_entity_seq[i], self.cur_entity[i], self.final_entity_type[i], self.utt[i], self.label[i]
 
     def __len__(self):
         return len(self.label)
@@ -37,7 +40,8 @@ def collate(batch):
     past_entity_seq = [item[0] for item in batch]
     cur_entity = torch.tensor([item[1] for item in batch], dtype=torch.long)
     final_entity = torch.tensor([item[2] for item in batch], dtype=torch.long)
-    label = torch.tensor([item[3] for item in batch], dtype=torch.float)
+    # utt = [item[3] for item in batch]
+    label = torch.tensor([item[-1] for item in batch], dtype=torch.float)
     return past_entity_seq, cur_entity, final_entity, label
 
 

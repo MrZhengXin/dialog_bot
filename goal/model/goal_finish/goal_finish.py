@@ -9,7 +9,7 @@ from tqdm import tqdm
 from goal.model.goal_finish.lstm import RNN
 from goal.model.goal_finish.config import Config
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 
 class GoalFinishDataset(Dataset):
@@ -62,7 +62,7 @@ def train_epoch(model, criterion, optimizer, scheduler, train_loader, device, ma
         # Perform gradient descent, backwards pass
         loss.backward()
 
-        clip_grad_norm_(model.rnn.parameters(), max_norm=max_norm)
+        clip_grad_norm_(model.parameters(), max_norm=max_norm)
 
         # Take a step in the right direction
         optimizer.step()
@@ -138,13 +138,13 @@ def main(config):
         )
 
         # Early stop
-        # if len(valid_losses) > 4 and all(valid_loss >= loss for loss in valid_losses[-5:]):
-        #     print('Stopping early')
-        #     break
-        #
-        # if valid_loss < min_valid_loss:
-        #     min_valid_loss = valid_loss
-        #     torch.save(model.state_dict(), config.save_path)
+        if len(valid_losses) > 4 and all(valid_loss >= loss for loss in valid_losses[-5:]):
+            print('Stopping early')
+            break
+
+        if valid_loss < min_valid_loss:
+            min_valid_loss = valid_loss
+            torch.save(model.state_dict(), config.save_path)
 
         train_losses.append(train_loss)
         valid_losses.append(valid_loss)

@@ -11,8 +11,8 @@ class Config:
         self.dropout_probability = 0
         self.shuffle = True
         self.batch_size = 128
-        self.lr = 1e-4
-        self.max_norm = 2
+        self.lr = 1e-5
+        self.max_norm = 1
         self.num_epoch = 50
         # self.device = torch.device("cpu")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

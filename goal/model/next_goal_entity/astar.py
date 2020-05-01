@@ -24,8 +24,15 @@ class AStarEntity(nn.Module):
 
         # self.text_embedding = nn.Embedding(self.vocab_size, self.embed_size)
         self.entity_embedding = nn.Embedding(self.goal_entity_size + 1, self.embed_size)
+        self.utt_embedding = nn.Embedding(self.vocab_size, self.embed_size)
 
-        self.rnn = nn.LSTM(
+        self.entity_rnn = nn.LSTM(
+            self.embed_size,
+            self.hidden_size,
+            self.n_layers,
+            bidirectional=config.bidirectional,
+        )
+        self.utt_rnn = nn.LSTM(
             self.embed_size,
             self.hidden_size,
             self.n_layers,
@@ -33,7 +40,7 @@ class AStarEntity(nn.Module):
         )
 
         self.fc1 = nn.Linear(
-            self.hidden_size * self.input_size_factor,
+            (self.hidden_size * self.input_size_factor) * 1 + self.embed_size,
             64,
         )
         nn.init.kaiming_normal_(self.fc1.weight, mode='fan_in', nonlinearity='relu')
@@ -63,13 +70,14 @@ class AStarEntity(nn.Module):
 
         return h0, c0
 
-    def apply_rnn(self, embedding_out, lengths):
+    def apply_rnn(self, embedding_out, lengths, rnn, enforce_sorted=False):
         packed = pack_padded_sequence(
             embedding_out,
             lengths,
             batch_first=True,
+            enforce_sorted=enforce_sorted
         )
-        output, (hidden, cell) = self.rnn(packed, self.init_hidden()) # hidden: (num_layers * num_directions, batch, hidden_size)
+        output, (hidden, cell) = rnn(packed, self.init_hidden()) # hidden: (num_layers * num_directions, batch, hidden_size)
         output, _ = pad_packed_sequence(output, batch_first=True)  # (batch, seq_len, bidirec*hidden)
         # output = output.permute(0, 2, 1)
         # output = F.max_pool1d(output, kernel_size=output.shape[-1]).squeeze(-1)
@@ -104,36 +112,47 @@ class AStarEntity(nn.Module):
             if batch_size != self.batch_size:
                 self.batch_size = batch_size
 
-            lengths = torch.tensor([len(x) for x in past_entity_seq], dtype=torch.long)
-            lengths, permutation_indices = lengths.sort(0, descending=True)
 
             # Pad sequences so that they are all the same length
-            padded_inputs = self.pad_sequences(past_entity_seq, padding_val=self.padding_idx)
-            past_entity_seq = torch.tensor(padded_inputs, dtype=torch.long)
+            entity_lengths = [len(seq) for seq in past_entity_seq]
+            entity_lengths = torch.tensor(entity_lengths).to(self.device)
+            entity_lengths, permutation_indices = entity_lengths.sort(0, descending=True)
+            padded_entity_seq = self.pad_sequences(past_entity_seq, padding_val=self.padding_idx)
+            past_entity_seq = torch.tensor(padded_entity_seq, dtype=torch.long).to(self.device)
 
-            # Sort inputs
-            past_entity_seq = past_entity_seq[permutation_indices].to(self.device)
+            # utt_lengths = [len(seq) for seq in utt]
+            # utt_lengths = torch.tensor(utt_lengths).to(self.device)
+            # padded_utt = self.pad_sequences(utt, padding_val=self.padding_idx)
+            # past_utt = torch.tensor(padded_utt, dtype=torch.long).to(self.device)
+
+            # # Sort inputs
+            # past_entity_seq = past_entity_seq[permutation_indices].to(self.device)
 
             # Get embeddings
-            text_embed = self.entity_embedding(past_entity_seq)
-            output = self.apply_rnn(text_embed, lengths)
-            out = torch.relu(self.fc1(output))
-            out = torch.sigmoid(self.fc2(out))
-            # cur_goal_embed = self.entity_embedding(cur_entity)
-            # last_goal_embed = self.entity_embedding(last_entity)
-            # cur_cost_embed = torch.cat([output, cur_goal_embed], dim=-1)
-            # last_cost_embed = torch.cat([output, last_goal_embed], dim=-1)
+            entity_seq_embed = self.entity_embedding(past_entity_seq)
+            entity_seq_output = self.apply_rnn(entity_seq_embed, entity_lengths, self.entity_rnn, enforce_sorted=True)
+            # out = torch.relu(self.fc1(output))
+            # out = torch.sigmoid(self.fc2(out))
+
+            # utt_seq_embed = self.utt_embedding(past_utt)
+            # utt_seq_output = self.apply_rnn(utt_seq_embed, utt_lengths, self.utt_rnn)
+
+            cur_goal_embed = self.entity_embedding(cur_entity)
+            last_goal_embed = self.entity_embedding(last_entity)
+            cur_cost_embed = torch.cat([entity_seq_output, cur_goal_embed], dim=-1)
+            last_cost_embed = torch.cat([entity_seq_output, last_goal_embed], dim=-1)
 
             # cur_cost = F.dropout(torch.relu(self.fc1(cur_cost_embed)), 0.05)
-            # cur_cost = torch.relu(self.fc1(cur_cost_embed))
-            # cur_cost = torch.sigmoid(self.fc2(cur_cost))
+            cur_cost = torch.relu(self.fc1(cur_cost_embed))
+            cur_cost = torch.sigmoid(self.fc2(cur_cost))
 
             # remain_cost = F.dropout(torch.relu(self.fc1(last_cost_embed)), 0.05)
-            # remain_cost = torch.relu(self.fc1(last_cost_embed))
-            # remain_cost = torch.sigmoid(self.fc2(remain_cost))
-            #
-            # out = 0.5 * cur_cost + 0.5 * remain_cost
-            # out = cur_cost
+            remain_cost = torch.relu(self.fc1(last_cost_embed))
+            remain_cost = torch.sigmoid(self.fc2(remain_cost))
+
+            out = 0.5 * cur_cost + 0.5 * remain_cost
+
+            # return out
 
             # Put the output back in correct order
             permutation_index_pairs = list(zip(
@@ -149,24 +168,24 @@ class AStarEntity(nn.Module):
 
         elif tag == "test":
             seq_embed = self.entity_embedding(past_entity_seq)
-            seq_out, _ = self.rnn(seq_embed)
+            seq_out, _ = self.entity_rnn(seq_embed)
             seq_out = seq_out[-1]
-            out = torch.relu(self.fc1(seq_out))
-            out = torch.sigmoid(self.fc2(out))
+            # out = torch.relu(self.fc1(seq_out))
+            # out = torch.sigmoid(self.fc2(out))
 
-            # cur_goal_embed = self.entity_embedding(cur_entity)
-            # last_goal_embed = self.entity_embedding(last_entity)
-            # cur_cost_embed = torch.cat([seq_out, cur_goal_embed], dim=-1)
-            # last_cost_embed = torch.cat([seq_out, last_goal_embed], dim=-1)
-            #
-            # # cur_cost = F.dropout(torch.relu(self.fc1(cur_cost_embed)), 0.05)
-            # cur_cost = torch.relu(self.fc1(cur_cost_embed))
-            # cur_cost = torch.sigmoid(self.fc2(cur_cost))
-            #
-            # # remain_cost = F.dropout(torch.relu(self.fc1(last_cost_embed)), 0.05)
-            # remain_cost = torch.relu(self.fc1(last_cost_embed))
-            # remain_cost = torch.sigmoid(self.fc2(remain_cost))
-            #
-            # out = 0.5 * cur_cost + 0.5 * remain_cost
+            cur_goal_embed = self.entity_embedding(cur_entity)
+            last_goal_embed = self.entity_embedding(last_entity)
+            cur_cost_embed = torch.cat([seq_out, cur_goal_embed], dim=-1)
+            last_cost_embed = torch.cat([seq_out, last_goal_embed], dim=-1)
+
+            # cur_cost = F.dropout(torch.relu(self.fc1(cur_cost_embed)), 0.05)
+            cur_cost = torch.relu(self.fc1(cur_cost_embed))
+            cur_cost = torch.sigmoid(self.fc2(cur_cost))
+
+            # remain_cost = F.dropout(torch.relu(self.fc1(last_cost_embed)), 0.05)
+            remain_cost = torch.relu(self.fc1(last_cost_embed))
+            remain_cost = torch.sigmoid(self.fc2(remain_cost))
+
+            out = 0.5 * cur_cost + 0.5 * remain_cost
 
             return out
