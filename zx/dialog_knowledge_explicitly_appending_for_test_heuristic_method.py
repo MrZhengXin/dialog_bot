@@ -62,30 +62,15 @@ def cal_score(triple, qa):
 
     return score
 
-'''
-def check_relation(relation, source):
-    if relation in source or \
-        ('多重' in source and relation == '体重') or \
-            (('多高' in source or '多 高' in source) and relation == '身高') or \
-            ('介绍' in source and relation == '简介') or \
-        (('消费 如何' in source or '人均 消费' in source or '平均价格' in source) and relation == '人均价格') or \
-        (('唱' in source or '谁 的 歌' in source) and relation == '演唱') or \
-            ('在 哪' in source and relation == '地址') or \
-            ('评价' in source and relation == '评论') or \
-            (('哪年' in source or '出生' in source) and relation == '生日') or \
-            ('时候' in source and relation == '时间') or \
-            (('哪里' in source or '在 哪' in source or '出生 地区' in source or '哪 的' in source) and relation == '出生地'):
-        return True
-    return False
-'''
+
 
 random.seed()
 with open('test_1.json', 'r') as f:
     x = f.readlines()
 
-with open('next_goal(1).txt', 'r') as f:
-    next_goal = f.readline()
-    next_goal = eval(next_goal)
+with open('next_goal (3).txt', 'r') as f:
+    next_goal = f.readlines()
+    next_goal = [eval(i) for i in next_goal]
 
 g = open('test_with_knowledge.src', 'w')
 
@@ -117,148 +102,144 @@ for i in x:
 
 
     kg = i['knowledge']
-
-    # entity replace
-    entity_cnt = 0
-    entity_dict = dict()
-    for gi in goal:
-        gi_parts = gi.split('；')
-        for gi_part in gi_parts:
-            entity = re.findall('『[^』]*』', gi_part)
-            if len(entity) == 0:
-                continue
-            entity = entity[0][1:-1].strip()
-            entity_no = ''
-            if '兴趣点 推荐' in gi:
-                entity_no = 'restaurant_' + str(entity_cnt)
-                entity_cnt += 1
-            if '电影 推荐' in gi:
-                entity_no = 'movie_' + str(entity_cnt)
-                entity_cnt += 1
-            if '播放 音乐' in gi:
-                entity_no = 'song_' + str(entity_cnt)
-                entity_cnt += 1
-            if entity_no == '':
-                continue
-            entity_dict[entity] = entity_no
-            for j in range(len(i['history'])):
-                if entity in i['history'][j]:
-                    i['history'][j] = i['history'][j].replace(entity, entity_no)
-            for j in range(len(kg)):
-                if kg[j][0].replace(' ', '') == entity.replace(' ', ''):
-                    kg[j][0] = entity_no
-                kg[j][2] = kg[j][2].replace(entity, entity_no)
-
     conversation = ' '.join(i['history'])
     history = ' '.join(i['history'][:-1])
     question = i['history'][-1]
     if question[0] == '[':
         question = question[4:]
 
+    # find entities and whether it was already appeared
+    songs = set()
+    movies = set()
+    entity_cnt = 0
+    entity_dict = dict()
+    restaurant = ''
+    for j in kg:
+        entity, relation, info = j
+        if relation == '演唱':
+            if info.replace(' ', '') in conversation.replace(' ', ''):
+                entity_no = 'song_' + str(entity_cnt)
+                entity_dict[info] = entity_no
+                entity_cnt += 1
+            else:
+                songs.add(entity)
+
+        if relation == '国家地区':
+            if entity.replace(' ', '') in conversation.replace(' ', ''):
+                entity_no = 'movie_' + str(entity_cnt)
+                entity_dict[entity] = entity_no
+                entity_cnt += 1
+            else:
+                movies.add(entity)
+        if relation == '地址':
+            entity_no = 'restaurant_' + str(entity_cnt)
+            entity_dict[entity] = entity_no
+            entity_cnt += 1
+            if next_goal[num][0] == '兴趣点推荐'\
+                    and entity.replace(' ', '') not in conversation.replace(' ', ''):
+                restaurant = entity
+                print(restaurant)
+    # recommend movie and song
+    recommend_movies, play_song = '', ''
+    if '音乐推荐' in next_goal[num][0] and next_goal[num][2] == 0  \
+            and next_goal[num][1].replace(' ', '') not in conversation.replace(' ', ''):
+        play_song = next_goal[num][1]
+        entity_no = 'movie_' + str(entity_cnt)
+        entity_dict[play_song] = entity_no
+        entity_cnt += 1
+
+    if '电影推荐' == next_goal[num][0] and next_goal[num][2] == 0:
+        # retrieve movie recommendation from goal first
+        for gi in goal:
+            if '电影 推荐' not in gi or recommend_movies != '':
+                continue
+            movies = re.findall('『[^』、]*』', gi)
+
+            goal_num = re.findall('\[[1-9]\]', gi)[0]
+            goal_num_previous = '[' + str(eval(goal_num[1])-1) + ']'
+            if goal_num_previous != '[0]' and goal_num_previous not in conversation:
+                break
+            goal_num_next = '[' + str(eval(goal_num[1])+1) + ']'
+            if goal_num_next in conversation:
+                continue
+
+            for movie in movies:
+                movie = movie[1:-1].strip().replace(' ', '')
+                if movie not in entity_dict.keys() and recommend_movies == '':
+                    recommend_movies = movie
+                    break
+
+        if recommend_movies == '' and next_goal[num][1].replace(' ', '') not in conversation.replace(' ', ''):
+            recommend_movies = next_goal[num][1]
+        if recommend_movies != '':
+            entity_no = 'movie_' + str(entity_cnt)
+            entity_dict[recommend_movies] = entity_no
+            entity_cnt += 1
+
     # news recommendations
     news_recommend = False
-    for gi in goal:
-        if '新闻 点播' not in gi and '新闻 推荐' not in gi:
-            continue
-        goal_num = re.findall('\[[1-9]\]', gi)[0]
-        goal_num_previous = '[' + str(eval(goal_num[1])-1) + ']'
-        if goal_num_previous != '[0]' and goal_num_previous not in conversation:
-            break
-        goal_num_next = '[' + str(eval(goal_num[1])+1) + ']'
-        if goal_num_next in conversation:
-            continue
+    if next_goal[num][0] in ['新闻点播', '新闻推荐'] and next_goal[num][2] == 0:
+        for gi in goal:
+            if '新闻 点播' not in gi and '新闻 推荐' not in gi:
+                continue
+            goal_num = re.findall('\[[1-9]\]', gi)[0]
+            goal_num_previous = '[' + str(eval(goal_num[1])-1) + ']'
+            if goal_num_previous != '[0]' and goal_num_previous not in conversation:
+                break
+            goal_num_next = '[' + str(eval(goal_num[1])+1) + ']'
+            if goal_num_next in conversation:
+                continue
 
-        entity, news = re.findall('『[^』]*』', gi)
-        news = news[1:-1]
-        news = re.split("     |（", news)[0]
-        entity = entity[1:-1]  # remove 『  』
-        news_words = set(news.split(' '))
-        conversation_words = set(conversation.split(' '))
-        appear_ratio = len(news_words.intersection(conversation)) / len(news_words)
+            entity, news = re.findall('『[^』]*』', gi)
+            news = news[1:-1]
+            news = re.split("     |（", news)[0]
+            entity = entity[1:-1]  # remove 『  』
+            news_words = set(news.split(' '))
+            conversation_words = set(conversation.split(' '))
+            appear_ratio = len(news_words.intersection(conversation)) / len(news_words)
 
-        if appear_ratio < 0.18:
-            if '新闻 推荐' not in gi:
-                news_dict[num] = news
-            else:
-                news_dict[-num] = news
-            # news = '新闻'
-            news_knowledge = [entity, '新闻', news]
-            print(news_knowledge, question, file=g, sep='\t')
-            # print(next_goal[num], question)
-            news_recommend = True
-            break
+            if appear_ratio < 0.18:
+                # if '新闻 推荐' not in gi:
+                    # news_dict[num] = news
+                # else:
+                    # news_dict[-num] = news
+                # news = '新闻'
+                news_knowledge = [entity, '新闻', news]
+                print(news_knowledge, question, file=g, sep='\t')
+                # print(next_goal[num], question)
+                news_recommend = True
+                break
     if news_recommend:
         continue
 
+
+    history = ' '.join(i['history'][:-1])
+    question = i['history'][-1]
+
     using_k = set()
     max_knowledge = 3
-    play_song = ''
-    recommend_movies = ''
-    movie_comment = ''
-    song_comment = ''
 
-    # retrieve movie recommendation
-    for gi in goal:
-        if '电影 推荐' not in gi or recommend_movies != '':
-            continue
-        movies = re.findall('『[^』、]*』', gi)
-
-        goal_num = re.findall('\[[1-9]\]', gi)[0]
-        goal_num_previous = '[' + str(eval(goal_num[1])-1) + ']'
-        if goal_num_previous != '[0]' and goal_num_previous not in conversation:
-            break
-        goal_num_next = '[' + str(eval(goal_num[1])+1) + ']'
-        if goal_num_next in conversation:
-            continue
-
-        for movie in movies:
-            movie = entity_dict[movie[1:-1].strip()]
-            if movie not in conversation and recommend_movies == '':
-                recommend_movies = movie
-                break
-
-    # retrieve music recommendation
-    for gi in goal:
-        if '播放 音乐' not in gi:
-            continue
-
-        goal_num = re.findall('\[[1-9]\]', gi)[0]
-        goal_num_previous = '[' + str(eval(goal_num[1])-1) + ']'
-        if goal_num_previous != '[0]' and goal_num_previous not in conversation:
-            break
-        goal_num_next = '[' + str(eval(goal_num[1])+1) + ']'
-        if goal_num_next in conversation:
-            continue
-
-        play_song = re.findall('『[^』]*』', gi)[0][1:-1].strip()
-        play_song = entity_dict[play_song]
-        if play_song in question:
-            break
-        if play_song in conversation:
-            play_song = ''  #already mentioned
-
-
+    comment = ''
     for j in range(len(kg)):
-        if kg[j][1] == '演唱' and kg[j][0] not in entity_dict.keys():
-            if 'song_0' not in entity_dict.values():
-                entity_dict[kg[j][2]] = 'song_0'
-            else:
-                entity_dict[kg[j][2]] = 'song_1'
+
 
         if max_knowledge == 0:
             break
-        if kg[j][0] in [recommend_movies, play_song] and kg[j][1] == '评论':
+        if kg[j][1] == '评论' and len(kg[j][2]) > 64:
+            kg[j][2] = kg[j][2][:64]
+        if (kg[j][0] in [recommend_movies, play_song] and kg[j][1] == '评论') or \
+                (kg[j][0] == restaurant and kg[j][1] == '特色菜' and kg[j][2] in conversation):
+            kg[j][0] = entity_dict[kg[j][0]]
             comment = kg[j]
         if kg[j][1] == '新闻':  # news knowledge is already handled
             continue
 
-        if kg[j][0] in entity_dict.keys():
-            kg[j][0] = entity_dict[kg[j][0]]
-        if kg[j][1] == '评论' and len(kg[j][2]) > 64:
-            kg[j][2] = kg[j][2][:64]
+
         if check_relation(kg[j][1], question) and kg[j][0] != i['user_profile']['姓名'] and\
                 (((kg[j][0].replace(' ', '') in conversation.replace(' ', '')) or (kg[j][2].replace(' ', '') in conversation.replace(' ', ''))) or \
                  ((kg[j][0].replace(' ', '') in conversation.replace(' ', '')) and kg[j][2].isdigit())):
+            if kg[j][0] in entity_dict.keys():
+                kg[j][0] = entity_dict[kg[j][0]]
             using_k.add(str(kg[j]))
             # if kg[j][1] == '新闻':
                 # news[num] = kg[j][2]
@@ -281,8 +262,15 @@ for i in x:
                 print(kg[j], end='\t', file=g)
                 max_knowledge -= 1
 
+    # replace entity in diaglog
+    for j in range(len(i['history'])):
+        for entity, entity_no in zip(entity_dict.keys(), entity_dict.values()):
+            i['history'][j] = i['history'][j].replace(entity, entity_no)
+
+    question = i['history'][-1]
     if max_knowledge == 3:
-        if recommend_movies != '' or (play_song != '' and ('其他' in question or '推荐' in question or '别的' in question)):
+        if recommend_movies != '' or play_song != '' or restaurant != '':
+            print(recommend_movies, play_song, restaurant)
             print(comment, end='\t', file=g)
         elif '再见' not in question and '拜拜' not in question:
 
@@ -295,20 +283,19 @@ for i in x:
             print(add_history, end='\t', file=g)
             # if question[-1] == '？':
                 # print(question)
-            if '音乐推荐' == next_goal[num][0]:
-                print(next_goal[num], question)
     print(question, file=g)
     questions.append(question)
     entity_dicts[num] = str(entity_dict)
 
 
-with open('test_hypo_entity.txt', 'r') as f:
+with open('test_hypo_entity (1).txt', 'r') as f:
     x = f.readlines()
 
 gg = open('mbart_knowledge_input_no_history_entity.txt', 'w')
 for i in range(len(x)):
     x[i] = x[i].strip()
-    x[i] = x[i].replace(',', ',').replace('?', '？').replace('!', '！')
+    x[i] = x[i].replace(',', ',').replace('?', '？').replace('!', '！').replace('°C', '℃').\
+        replace('(', '（').replace(')', '）')
     # if i in news_dict.keys():
         # x[i] = news_dict[i]
     # if -i in news_dict.keys():
@@ -330,39 +317,3 @@ for i in range(len(x)):
     if 'song_1' in x[i] and song_0 is not None:
         x[i] = x[i].replace('song_1', song_0)
     print(x[i], file=gg)
-'''
-
-    if len(goal) == 0:
-        continue
-
-    user_first = True if 'User 主动' in goal[0] else False
-    used_k = set()
-
-    for j in range(len(conversation)-1):
-        using_k = set()
-        user_round = user_first ^ (j & 1)
-        qa = conversation[j].strip() + ' ' + conversation[j + 1].strip()
-        history = ' '.join(conversation[:j])
-        for k in kg:
-            if str(k) in used_k:
-                continue
-            score = cal_score(k, history + ' ' + conversation[j].strip(), conversation[j+1].strip())
-
-
-            if score > max(1, cal_score(k, history, conversation[j].strip())):
-                if user_round:
-                    using_k.add(str(k[:3]))
-                    if score > 2:
-                        used_k.add(str(k[:3]))  # remove redundant tuple such as multiple celebrity birthday
-        if len(using_k) != 0:
-            print(*using_k, end='\t', file=g)
-        print(conversation[j], file=g)
-    print(conversation[-1], file=g)
-    print(file=g)'''
-
-
-
-
-
-
-

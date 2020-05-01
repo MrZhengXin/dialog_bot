@@ -1,3 +1,9 @@
+训练数据构造：
+```
+python dialog_knowledge_explicitly_appending_heuristic_method.py --knowledge_sep [UNK] --knowledge_end [CLS] --goal_stage_sep [SEP] --m
+ax_history_length 200 --force_history True
+```
+
 # 基于朴素知识匹配的mBART模型解决面向推荐的对话任务
 
 ## 成果
