@@ -31,8 +31,11 @@ class Dataset(object):
             for jdx in range(1, line_len):
                 # 前一个对话的utter, type预测goal是否完成（一轮对话是否结束）
                 if self.bot[idx][jdx] == 1:  # 是bot
-                    if self.utterance[idx][jdx - 1]:
-                        binary_utterance.append(self.utterance[idx][jdx - 1])
+                    if self.utterance[idx][max(0, jdx-2)]:
+                    # if self.utterance[idx][0]:
+                        utt_flat = [utt for utts in self.utterance[idx][max(0, jdx-2):jdx] for utt in utts]
+                        utt_flat = [utt for utts in self.utterance[idx][:jdx] for utt in utts]
+                        binary_utterance.append(utt_flat)
                         binary_goal_type.append(self.goal_type[idx][jdx - 1])
                         bianry_label.append(self.label[idx][jdx])
         return binary_utterance, binary_goal_type, bianry_label
@@ -50,13 +53,15 @@ class Dataset(object):
         return new_goal_seq, new_kg_seq
 
     def next_goal_data(self, undersample=False):
+        binary_utterance = list()
         binary_goal_type, binary_final_goal_type, binary_goal_type_label, binary_goal_type_idx = list(), list(), list(), list()
         binary_goal_entity, binary_final_goal_entity, binary_goal_entity_label, binary_goal_entity_idx = list(), list(), list(), list()
 
         for idx in range(len(self.goal_type)):
             line_len = len(self.goal_type[idx])
             for jdx in range(1, line_len):
-                if self.bot[idx][jdx] == 1:
+                if self.bot[idx][jdx] == 1 and self.utterance[idx][jdx - 1]:
+                    binary_utterance.append(self.utterance[idx][jdx - 1])
                     # 历史对话的所有type entity
                     pre_type_seq = self.goal_type[idx][:jdx]
                     pre_entity_seq = self.goal_entity[idx][:jdx]
@@ -102,7 +107,7 @@ class Dataset(object):
                                 binary_final_goal_entity.append(entity)
                                 break
 
-        return binary_goal_type, binary_goal_type_label, binary_goal_entity, binary_goal_entity_label, binary_final_goal_type, binary_final_goal_entity
+        return binary_goal_type, binary_goal_type_label, binary_goal_entity, binary_goal_entity_label, binary_final_goal_type, binary_final_goal_entity, binary_utterance
 
 
 def file_saver(file_path, obj):
@@ -113,7 +118,7 @@ def file_saver(file_path, obj):
 def get_data(data_tag, undersample=False):
     data = Dataset(data_tag)
     binary_utterance, binary_goal_type, binary_label = data.binary_task_data()
-    next_goal_type, next_goal_type_label, next_goal_entity, next_goal_entity_label, final_goal_type, final_goal_entity = data.next_goal_data(
+    next_goal_type, next_goal_type_label, next_goal_entity, next_goal_entity_label, final_goal_type, final_goal_entity, next_goal_utterance = data.next_goal_data(
         undersample=undersample)
 
     print("Binary Jump Classification...")
@@ -138,6 +143,7 @@ def get_data(data_tag, undersample=False):
     file_saver(save_path + data_tag + "_next_goal_entity_label.txt", next_goal_entity_label)
     file_saver(save_path + data_tag + "_final_goal_type.txt", final_goal_type)
     file_saver(save_path + data_tag + "_final_goal_entity.txt", final_goal_entity)
+    file_saver(save_path + data_tag + "_next_goal_utterance.txt", next_goal_utterance)
 
 
 if __name__ == "__main__":

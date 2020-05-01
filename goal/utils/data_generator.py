@@ -78,14 +78,14 @@ def get_word_dict(utterances):
             u = re.sub(r"\[\d*\]", "", u)
             u = re.sub(r"[~`!#$%^&*()_+-=|';\":/.,?><~·！@#￥%……&*（）——+-=“：’；、。，？》《{}]+", "", u)
             for word in u.strip().split():
-                if word is not "" and word not in stop_words:  # 原先没有过滤停用词
+                if word is not "":  # 原先没有过滤停用词
                     word_set.add(word)
 
     word_dict = dict()
+    word_dict["PAD"] = 0
+    word_dict["UNK"] = 1
     for i, word in enumerate(word_set):
-        word_dict[word] = i
-    word_dict["UNK"] = len(word_dict)
-    word_dict["PAD"] = len(word_dict)
+        word_dict[word] = i + 2
 
     print("word dict size: %d" % (len(word_dict)))
     file_saver("../data/others/word_dict.txt", word_dict)
@@ -156,6 +156,10 @@ def get_graph(train_data, val_data, graph_size, save_tag, item_dict=None, flag=F
         for jdx in range(len(val_data[idx]) - 1):
             graph[val_data[idx][jdx]][val_data[idx][jdx + 1]] = 1
 
+    if save_tag == "entity" and item_dict:
+        graph[item_dict["问天气"]][item_dict["时光机"]] = 1
+        graph[item_dict["问天气"]][item_dict["流泪手心"]] = 1
+
     if flag:
         # 关系：明星和对应的新闻
         all_star = file_loader("../data/others/all_star.txt")
@@ -170,6 +174,7 @@ def get_graph(train_data, val_data, graph_size, save_tag, item_dict=None, flag=F
                     movie_list = [remove_punctuation(mv) for mv in movie_list.split("\t")]
                     for mv in movie_list:
                         graph[item_dict[star]][item_dict[mv]] = 1
+                        graph[item_dict[mv]][item_dict[star]] = 1
         # 关系：歌手和唱的歌
         with open("../data/others/singer2song_with_comment.txt", "r", encoding='utf-8') as f:
             for music in f.readlines():
@@ -179,6 +184,12 @@ def get_graph(train_data, val_data, graph_size, save_tag, item_dict=None, flag=F
                     music_list = [remove_punctuation(mc) for mc in music_list.split("\t")]
                     for mc in music_list:
                         graph[item_dict[star]][item_dict[mc]] = 1
+                        graph[item_dict[mc]][item_dict[star]] = 1
+                    for i in music_list:
+                        for j in music_list:
+                            if i != j:
+                                graph[item_dict[i]][item_dict[j]] = 1
+
         # 关系：城市和POI，城市和菜，POI和菜，菜和POI
         with open("../data/others/food_kg_human_filter.json", "r", encoding='utf-8') as f:
             for line in f.readlines():
@@ -241,8 +252,11 @@ def save_goal_type_entity_neighbour(goal_type_graph, goal_entity_graph):
 def save_test_data(word_dict, goal_type_dict, goal_entity_dict, type_nb_dict, entity_nb_dict):
     binary_utterance, binary_label, binary_goal_type = list(), list(), list()
     next_goal_type, next_goal_entity, next_final_goal_type, next_final_goal_entity = list(), list(), list(), list()
-    round_ids, max_ids = list(), list()
+    round_ids, max_ids, session_ids = list(), list(), list()
     UNK = word_dict["UNK"]
+    # debug
+    entity_debug = open("../data/others/test_entity_debug.txt", 'w', encoding='utf-8')
+    idx2entity = list(goal_entity_dict.keys())
 
     total_cnt = 0
     with open("../data/process/test.txt", "r", encoding='utf-8') as f:
@@ -253,7 +267,9 @@ def save_test_data(word_dict, goal_type_dict, goal_entity_dict, type_nb_dict, en
 
             # if utterance == "":
             #     continue
-            history = ' '.join(line[0].split("\001"))
+            session_cnt = int(line[0])
+            session_ids.append(session_cnt)
+            history = ' '.join(line[1].split("\001"))
             round_id = re.findall(r"\[(\d*)\]", history)
             if len(round_id) > 0:
                 round_ids.append(int(round_id[-1]))
@@ -261,7 +277,7 @@ def save_test_data(word_dict, goal_type_dict, goal_entity_dict, type_nb_dict, en
                 round_ids.append(1)
             max_ids.append(int(line[-1].replace('\n', '')))
 
-            utterance = line[0].split("\001")[-1]
+            utterance = line[1].split("\001")[-1]
             utterance = re.sub("\[\d*\]", "", utterance)
             utterance = re.sub(
                 r'[~`!#$%^&*()_+-=|\';":/.,?><~·！@#￥%……&*（）——+-=“：’；、。，？》《{}]+', "", utterance)
@@ -270,31 +286,61 @@ def save_test_data(word_dict, goal_type_dict, goal_entity_dict, type_nb_dict, en
             #     continue
             # 评估当前goal是否完成
             binary_utterance.append(utterance)
-            binary_label.append(int(line[1]))
-            binary_goal_type.append(goal_type_dict[word_replace(line[2])])
+            binary_label.append(int(line[2]))
+            binary_goal_type.append(goal_type_dict[word_replace(line[3])])
             # 预测下一个goal的type
             type_seq_candidate = list()
-            first_type_idx = goal_type_dict[word_replace(line[2])]
+            first_type_idx = goal_type_dict[word_replace(line[3])]
             for nb in type_nb_dict[first_type_idx]:
                 if nb == first_type_idx and len(type_nb_dict[first_type_idx]) > 1:
                     continue
                 type_seq_candidate.append([first_type_idx, nb])
             next_goal_type.append(type_seq_candidate)
-            next_final_goal_type.append(goal_type_dict[word_replace(line[4])])
+            next_final_goal_type.append(goal_type_dict[word_replace(line[5])])
             # next_goal_type_idx.append(idx)
             # topic
+            kgs = eval(line[7])
+            kg_entitys = []
+            kg_entitys_debug = []
+            for kg in kgs:
+                for item in kg:
+                    item = word_replace(item)
+                    if item in goal_entity_dict.keys():
+                        kg_entitys.append(goal_entity_dict[item])
+                        kg_entitys_debug.append(item)
+            kg_entitys = list(set(kg_entitys))
+            kg_entitys_debug = list(set(kg_entitys_debug))
+
             entity_seq_candidate = list()
-            first_entity_idx = goal_entity_dict[word_replace(line[3])]
+            entity_seq_candidate_debug = list()
+            first_entity_idx = goal_entity_dict[word_replace(line[4])]
+            nb_debug = []
             for nb in entity_nb_dict[first_entity_idx]:
-                if nb == first_entity_idx and len(entity_nb_dict[first_entity_idx]) > 1:
-                    continue
-                entity_seq_candidate.append([first_entity_idx, nb])
+                nb_name = idx2entity[nb]
+                nb_debug.append(nb_name)
+                # if nb not in kg_entitys or (nb == first_entity_idx and len(entity_nb_dict[first_entity_idx]) > 1):
+                if nb_name.replace("新闻", "") in kg_entitys_debug \
+                        or (nb_name in list(goal_type_dict.keys()) and nb_name != word_replace(line[4])
+                            and nb_name != "再见"):
+                    entity_seq_candidate.append([first_entity_idx, nb])
+                    entity_seq_candidate_debug.append([idx2entity[first_entity_idx], idx2entity[nb]])
+            if len(entity_seq_candidate) == 0:
+                print(total_cnt + 1)
+                entity_seq_candidate = [first_entity_idx, first_entity_idx]
+                entity_seq_candidate_debug = [idx2entity[first_entity_idx], idx2entity[first_entity_idx]]
+
+            entity_debug.write('nb:' + str(nb_debug))
+            entity_debug.write('kg_entitys:' + str(kg_entitys_debug))
+            entity_debug.write('entity_seq_candidate:' + str(entity_seq_candidate_debug))
+            entity_debug.write('\n')
+
             next_goal_entity.append(entity_seq_candidate)
-            next_final_goal_entity.append(goal_entity_dict[word_replace(line[5])])
+            next_final_goal_entity.append(goal_entity_dict[word_replace(line[6])])
             # next_goal_entity_idx.append(idx)
 
             total_cnt += 1
 
+    entity_debug.close()
     print('test data size:', total_cnt)
     save_path = "../data/train/"
     data_tag = "test"
@@ -309,6 +355,7 @@ def save_test_data(word_dict, goal_type_dict, goal_entity_dict, type_nb_dict, en
     file_saver(save_path + data_tag + "_final_goal_entity.txt", next_final_goal_entity)
     file_saver(save_path + data_tag + "_round_id.txt", round_ids)
     file_saver(save_path + data_tag + "_max_id.txt", max_ids)
+    file_saver(save_path + data_tag + "_session_id.txt", session_ids)
 
 
 def main():
@@ -337,7 +384,7 @@ def main():
     # goal type and entity neighbour
     type_nb_dict, entity_nb_dict = save_goal_type_entity_neighbour(goal_type_graph, goal_entity_graph)
 
-    save_test_data(word_dict, all_goal_type_dict, all_goal_entity_dict, type_nb_dict, entity_nb_dict)
+    # save_test_data(word_dict, all_goal_type_dict, all_goal_entity_dict, type_nb_dict, entity_nb_dict)
 
 
 if __name__ == "__main__":

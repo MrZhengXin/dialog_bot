@@ -28,7 +28,7 @@ def process_session_data(input_filename, output_filename):
     bad_flag = ["参考知识"]
     flag = ["再见", "问天气", "问时间", "天气信息推送"]  # 无关键词
     flag1 = ["关于明星的聊天", "音乐推荐", "播放音乐", "美食推荐",
-             "电影推荐", "音乐点播", "问日期", "新闻推荐", "新闻点播"]  # 一个关键词
+             "电影推荐", "音乐点播", "问日期", "新闻推荐", "新闻点播", "提问", "兴趣点推荐"]  # 一个关键词
     flag2 = ["问答"]
     flag3 = ["寒暄"]
     flag4 = ['问User爱好', '问User年龄', '问User性别', '问User姓名']
@@ -119,19 +119,21 @@ def process_session_data(input_filename, output_filename):
                     current_topic = type  # 当前这一轮对话的话题
 
                 else:
-                    if type in flag1:  # 一个关键词
+                    if type.replace(' ', '') in flag1:  # 一个关键词
                         topic = current_goal.split("『", 1)[-1].split("』", 1)[0]  # 由『』给出的第一个关键词
                         if type.replace(' ', '') == "问日期":
+                            topic = type
                             output_file.write(
-                                conversation[i] + '\t' + str(label[i]) + '\t' + type + '\t' + type + '\t' + str(
+                                conversation[i] + '\t' + str(label[i]) + '\t' + type + '\t' + topic + '\t' + str(
                                     kg) + '\t' + str(user_profile) + '\t' + dialog_flag + '\n')
-                            current_topic = type
+                            current_topic = topic
 
-                        elif "新闻" in type:
+                        elif "新闻" in current_goal:
+                            topic += " 新闻"
                             output_file.write(conversation[i] + '\t' + str(
-                                label[i]) + '\t' + type + '\t' + topic + " 新闻" + '\t' + str(
+                                label[i]) + '\t' + type + '\t' + topic + '\t' + str(
                                 kg) + '\t' + str(user_profile) + '\t' + dialog_flag + '\n')
-                            current_topic = topic + " 新闻"
+                            current_topic = topic
 
                         else:
                             output_file.write(
@@ -139,7 +141,7 @@ def process_session_data(input_filename, output_filename):
                                     kg) + '\t' + str(user_profile) + '\t' + dialog_flag + '\n')
                             current_topic = topic
 
-                    elif type in flag2:  # 问答
+                    elif type.replace(' ', '') in flag2:  # 问答
                         topic1 = current_goal.split("『", 1)[-1].split("』", 1)[0]
                         topic2 = current_goal.split("『", -1)[-1].split("』", -1)[0]
 
@@ -147,16 +149,18 @@ def process_session_data(input_filename, output_filename):
                             output_file.write(
                                 conversation[i] + '\t' + str(label[i]) + '\t' + type + '\t' + topic1 + '\t' + str(
                                     kg) + '\t' + str(user_profile) + '\t' + dialog_flag + '\n')
+                            current_topic = topic1
                         else:  # 需要参考知识
                             output_file.write(
                                 conversation[i] + '\t' + str(label[i]) + '\t' + type + '\t' + topic2 + '\t' + str(
                                     kg) + '\t' + str(user_profile) + '\t' + dialog_flag + '\n')
-                        current_topic = topic2
+                            current_topic = topic2
 
                     else:  # 其他（闲聊？是否还要再分？）
                         output_file.write(
                             conversation[i] + '\t' + str(label[i]) + '\t' + type + '\t' + type + '\t' + str(
                                 kg) + '\t' + str(user_profile) + '\t' + dialog_flag + '\n')
+                        current_topic = type
                 count += 1
 
             else:  # 非一轮对话开头
@@ -167,16 +171,6 @@ def process_session_data(input_filename, output_filename):
 
 
 def process_test_data(input_filename, output_filename):
-    # 对话类型
-    bad_flag = ["参考知识"]
-    flag = ["再见", "问天气", "问时间", "天气信息推送"]
-    flag1 = ["关于明星的聊天", "音乐推荐", "播放音乐", "美食推荐", "poi推荐",
-             "电影推荐", "音乐点播", "问日期", "新闻推荐", "新闻点播", "", "", ""]
-    flag2 = ["问答", "新闻 点播", "音乐 点播"]
-    flag3 = ["问 User 爱好", "天气 信息 推送"]
-    flag4 = ["新闻 推荐"]
-    all_flag = bad_flag + flag2 + flag + flag1
-
     # user_profile key
     p_r_key = ["拒绝"]
     p_p_key = ["喜欢的电影", "喜欢的明星", "喜欢的poi", "喜欢的音乐", "喜欢的新闻"]
@@ -190,6 +184,7 @@ def process_test_data(input_filename, output_filename):
     last_utterance = ''
     last_kg = None
     begin_of_file = True
+    session_cnt = 0
 
     for line in open(input_filename, 'r', encoding='utf-8'):
         # entity_level_goal = ""
@@ -227,54 +222,55 @@ def process_test_data(input_filename, output_filename):
         #         profile_entity_list.add(tmp_entity.strip())
         # profile_entity_list = list(profile_entity_list)
 
-        # 对话类型（目标序列中的第一个）
-        first_goal = goals[0].strip().split(']', 1)[-1].split('(', 1)[0].strip()
-        final_goal = goals[-2].strip().split(']', 1)[-1].split('(', 1)[0].strip()
         max_round = goals[-1].strip().split('[', 1)[-1].split(']', 1)[0].strip()
-        # if '......' in data['goal']:  # 存在省略的goal，提取......后面的那一个
-        #     final_goal = goals[2].strip().split(
-        #         ']', 1)[1].split('(', 1)[0].strip()
-        # else:
-        #     final_goal = goals[1].strip().split(
-        #         ']', 1)[1].split('(', 1)[0].strip()
 
         if len(data['history']) > 0:
             first_utterance = data['history'][0]
         else:
             first_utterance = ''
-        # try:
-        #     first_utterance = data['history'][0]
-        # except:
-        #     first_utterance = ''
         name = user_profile['姓名']
 
         if first_utterance != last_utterance and last_kg != kg:  # 将同一个session的放在一起，“寒暄”？？？
             if begin_of_file == False:  # 排除文件开头
                 output_file.write('\n')
             begin_of_file = False
+            session_cnt += 1
         last_utterance = first_utterance
         last_kg = kg
 
-        if first_goal in flag2:  # ["问答", "新闻 点播", "音乐 点播"]
-            if '『 参考 知识 』' in data['goal']:
-                first_goal_topic = data['goal'].strip().split(
-                    '『 参考 知识 』')[-1].split('『 ', 1)[-1].split('』', 1)[0].strip()
-            else:
-                first_goal_topic = data['goal'].strip().split(
-                    '『 ', 1)[-1].split('』', 1)[0].strip()
-        else:
-            first_goal_topic = first_goal
+        def get_goal_type_entity(goal):
+            bad_flag = ["参考知识"]
+            flag1 = ["关于明星的聊天", "音乐推荐", "播放音乐", "美食推荐",
+                     "电影推荐", "音乐点播", "问日期", "新闻推荐", "新闻点播", "提问", "兴趣点推荐"]  # 一个关键词
+            flag2 = ["问答"]  # 两个关键词
 
-        if final_goal in flag3:  # "问 User 爱好", "天气 信息 推送"
-            final_goal_topic = final_goal
-        else:
-            final_goal_topic = data['goal'].split(
-                final_goal)[-1].split('『 ', 1)[-1].split('』', 1)[0].strip()
-            if final_goal in flag4:  # "新闻 推荐"
-                final_goal_topic += ' 新闻'  # 需要的嘛？
+            type = goal.split(']', 1)[-1].split('(', 1)[0].replace(' ', '')
+
+            if "『" and "』" not in goal or type == "问日期":
+                entity = type
+            elif type in flag1:
+                entity = goal.split("『", 1)[-1].split("』", 1)[0].replace(' ', '')  # 由『』给出的第一个关键词
+                if "新闻" in goal:
+                    entity += "新闻"
+            elif type in flag2:
+                entity1 = goal.split("『", 1)[-1].split("』", 1)[0].replace(' ', '')
+                entity2 = goal.split("『", -1)[-1].split("』", -1)[0].replace(' ', '')
+
+                if entity1 not in bad_flag:
+                    entity = entity1
+                else:
+                    entity = entity2
+            else:
+                entity = type
+
+            return type, entity
+
+        first_goal, final_goal = goals[0], goals[-2]
+        first_goal_type, first_goal_topic = get_goal_type_entity(first_goal)
+        final_goal_type, final_goal_topic = get_goal_type_entity(final_goal)
         # 对话内容+是否为一轮对话的开头(不是)+第一轮对话的类型+话题+最终对话的类型+话题+背景知识+用户画像+当前哪一方说话(Bot)
-        output_file.write(conversation + '\t' + str(label) + '\t' + first_goal + '\t' + first_goal_topic + '\t' +
-                          final_goal + '\t' + final_goal_topic + '\t' + str(kg) + '\t' + str(
+        output_file.write(str(session_cnt) + '\t' + conversation + '\t' + str(label) + '\t' + first_goal_type + '\t' + first_goal_topic + '\t' +
+                          final_goal_type + '\t' + final_goal_topic + '\t' + str(kg) + '\t' + str(
             user_profile) + '\t' + dialog_flag + '\t' + max_round + '\n')
 
     output_file.close()
