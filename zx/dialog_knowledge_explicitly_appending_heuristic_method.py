@@ -16,9 +16,9 @@ parser.add_argument('--force_history', type=bool, default=False, help='normally 
 would needed')
 parser.add_argument('--max_history_length', type=int, default=128)
 parser.add_argument('--max_goal_stage_in_history', type=int, default=1)
-parser.add_argument('--train_json', type=str, default='train.json')
-parser.add_argument('--train_source_file', type=str, default='train_with_knowledge.src')
-parser.add_argument('--train_target_file', type=str, default='train_with_knowledge.tgt')
+parser.add_argument('--train_json', type=str, default='dev.json')
+parser.add_argument('--train_source_file', type=str, default='valid_with_knowledge.src')
+parser.add_argument('--train_target_file', type=str, default='valid_with_knowledge.tgt')
 
 args = parser.parse_args()
 
@@ -128,6 +128,8 @@ for i in x:
         if kg[j][1] != '评论' and '评论' in kg[j][1]:
             kg[j][0] += ' ' + kg[j][1].replace(' 评论', '')
             kg[j][1] = '评论'
+        if kg[j][1] == '新闻':  # not use news in knowledge to avoid multiple identical news
+            kg[j][2] == 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'
 
     # entity replacement
 
@@ -135,7 +137,10 @@ for i in x:
     entity_dict = dict()
     goal_info = [goal_filling.extract_info_from_goal(g) for g in goal]
     for gi in goal_info:
-        if len(gi) < 3:
+        if len(gi) == 4:  # news
+            kg.append([gi[2], '新闻', gi[3]])
+            continue
+        if len(gi) != 3:
             continue
         entities = gi[2] if type(gi[2]) is type(list()) else [gi[2]]
         for entity in entities:
@@ -224,8 +229,8 @@ for i in x:
         history = ' '.join(conversation[:j])
 
         # find the recommend song or movie
-        # print(goal_info[current_goal_stage-1:], conversation[j+1])
-        recommend_stage = '推荐' in goal_info[current_goal_stage - 1][1] or (conversation[j + 1][0] == '[' and '推荐' in
+        #print(goal_info[current_goal_stage-1:], conversation[j+1])
+        recommend_stage = '推荐' in goal_info[current_goal_stage - 1][1] or (conversation[j + 1][0] == '[' and '推荐' in \
                      goal_info[current_goal_stage][1])
         recommend_item = ''
         for gi in goal_info[current_goal_stage-1:current_goal_stage+1]:
@@ -259,6 +264,8 @@ for i in x:
                     k[2] = k[2][:88]
                 if user_round:  # we only need simulate bot
                     using_k.add(str(k[:3]))  # using sest to remove redundant tuple such as multiple celebrity birthday
+                if '新闻' in k[1]:  # avoid multiple news knowledge
+                    break
                 # if score > 3:
                     # the knowledge is fully explored
                     #  consider the celebrity birthday cases.
@@ -274,8 +281,12 @@ for i in x:
             goal_transition = goal_info[current_goal_stage - 1:current_goal_stage + 1]
             if '新闻' in goal_transition[0][1]:
                 goal_transition[0][3] = ''
+            if len(goal_transition[0]) > 2 and type(goal_transition[0][2]) == type(list):
+                goal_transition[0][2] = [entity_dict[e] for e in goal_transition[0][2]]
             if len(goal_transition) > 1 and '新闻' in goal_transition[1][1]:
                 goal_transition[1][3] = ''
+            if len(goal_transition) > 1 and len(goal_transition[1]) > 2 and type(goal_transition[1][2]) == type(list):
+                goal_transition[1][2] = [entity_dict[e] for e in goal_transition[1][2]]
             goal_transition = str(goal_transition)
             for k, v in zip(entity_dict.keys(), entity_dict.values()):
                 goal_transition = goal_transition.replace(k, v)
