@@ -271,7 +271,12 @@ for i in x:
 
         if user_round:
             # add goal transition
-            goal_transition = str(goal_info[current_goal_stage - 1:current_goal_stage + 1])
+            goal_transition = goal_info[current_goal_stage - 1:current_goal_stage + 1]
+            if '新闻' in goal_transition[0][1]:
+                goal_transition[0][3] = ''
+            if len(goal_transition) > 1 and '新闻' in goal_transition[1][1]:
+                goal_transition[1][3] = ''
+            goal_transition = str(goal_transition)
             for k, v in zip(entity_dict.keys(), entity_dict.values()):
                 goal_transition = goal_transition.replace(k, v)
             print(goal_transition, end=args.knowledge_sep, file=src)
