@@ -149,10 +149,12 @@ for i in x:
             continue
 
     # add goal transition
-    goal_transition = str(goal[current_goal_stage - 1:current_goal_stage + 1])
-    for k, v in zip(entity_dict.keys(), entity_dict.values()):
-        goal_transition = goal_transition.replace(k, v)
-    print(goal_transition, end='\t', file=src)
+    goal_transition = goal[current_goal_stage - 1:current_goal_stage + 1]
+    if '新闻' in goal_transition[0][1]:
+        goal_transition[0][3] = ''
+    if len(goal_transition) > 1 and '新闻' in goal_transition[1][1]:
+        goal_transition[1][3] = ''
+    goal_transition = str(goal_transition)
 
     # chat about celebrity         :
     if (goal[current_goal_stage-1][1] == '关于 明星 的 聊天' and current_round < 4) or (goal[current_goal_stage-1][1] == '问答' and current_round > 2 and goal[current_goal_stage][1] == '关于 明星 的 聊天'):
