@@ -4,6 +4,8 @@ import regex
 import re
 import datetime
 import argparse
+import goal_filling
+import sacrebleu
 
 parser = argparse.ArgumentParser(description='input delimiter. [ks]xxx[ks]xxx[ke]xxx[gs]xxx[gs]')
 parser.add_argument('--knowledge_sep', type=str, default='\t')
@@ -13,10 +15,10 @@ parser.add_argument('--bot_in_history', type=bool, default=True, help='whether b
 parser.add_argument('--force_history', type=bool, default=False, help='normally if knowledges were found, no history \
 would needed')
 parser.add_argument('--max_history_length', type=int, default=128)
-parser.add_argument('--max_goal_stage_in_history', type=int, default=2)
+parser.add_argument('--max_goal_stage_in_history', type=int, default=1)
 parser.add_argument('--train_json', type=str, default='train.json')
-parser.add_argument('--train_source_file', type=str, default='gpt2_train.src')
-parser.add_argument('--train_target_file', type=str, default='gpt2_train.tgt')
+parser.add_argument('--train_source_file', type=str, default='train_with_knowledge.src')
+parser.add_argument('--train_target_file', type=str, default='train_with_knowledge.tgt')
 
 args = parser.parse_args()
 
@@ -67,19 +69,36 @@ def check_relation(rel, qa):
 
 
 def cal_score(triple, q, a):
-    '''
+    """
     calculate if the triple(entity, relation, something) appears in the questions and answer
-    '''
+    """
+
+    # song or movie comments for recommendation
+    if ('movie' in triple[0] or 'song' in triple[0]) and '评论' in triple[1]:
+        if triple[0] in q or triple[0] not in a:
+            return -2
+        # if any part of sentences likely to appear in answer, use it
+        # for sp in triple[3]:
+            # sp = sp.split()
+            # if len(sp) < 3:
+                # continue
+            # common_words = [word for word in sp if (word in a and word not in ['', ' '])]  # match by word
+            # if len(common_words) / len(sp) > 0.8:
+                # return 4
+        return 4
+
     if len(triple[2]) == 0 or len(triple[3]) == 0:
         return 0  # something empty like ["异灵灵异-2002", "评论", ""]
     qa = q + ' ' + a
-    score = 1 if triple[0] in qa.replace(' ', '') else 0  # left entity appears
-    score += check_relation(triple[1], qa)  # relation appears
+    score = 1 if (triple[0] in qa.replace(' ', '') or ('天气' == triple[1] and '天气' in q)) else -1  # left entity appears
+    score += check_relation(triple[1], a)  # relation appears
+    if triple[1] == '出生地' and score < 2:
+        score -= 4  # probably not use birthplace knowledege
     if triple[2] in a:  # something directly appears
         score += 2
     else:
-        common_words = [word for word in triple[3] if (word in a.split() and word not in ['', ' '])]  # match by word
-        if (triple[1] not in ['成就', '获奖'] and len(common_words) / len(triple[3]) > 0.4) or (len(common_words) > 0 and triple[1] in ['评论', '出生地']):  # comments and birth places are more loose
+        common_words = [word for word in triple[3] if (word in (a if triple[1] == '新闻' else qa) and word not in ['', ' '])]  # match by word
+        if (triple[1] not in ['成就', '获奖'] and len(common_words) / len(triple[3]) > 0.5) or (len(common_words) > 0 and triple[1] in ['评论', '出生地']):  # comments and birth places are more loose
             score += 2
         else:
             score -= 2
@@ -101,29 +120,36 @@ difficult_info_mask = {'身高': 'height', '体重': 'weight', '评分': 'rating
 for i in x:
     i = json.loads(i)
     conversation = i['conversation']
-    goal = i['goal'].split('-->')
+    goal = i['goal'].split(' --> ')
     kg = i['knowledge']
+
+    # fix bug when song contain "   "
+    for j in range(len(kg)):
+        if kg[j][1] != '评论' and '评论' in kg[j][1]:
+            kg[j][0] += ' ' + kg[j][1].replace(' 评论', '')
+            kg[j][1] = '评论'
 
     # entity replacement
 
     entity_cnt = 0
     entity_dict = dict()
-    for gi in goal:
-        gi_parts = gi.split('；')
-        for gi_part in gi_parts:
-            entity = re.findall('『[^』]*』', gi_part)
-            if len(entity) == 0:
+    goal_info = [goal_filling.extract_info_from_goal(g) for g in goal]
+    for gi in goal_info:
+        if len(gi) < 3:
+            continue
+        entities = gi[2] if type(gi[2]) is type(list()) else [gi[2]]
+        for entity in entities:
+            # no redundant entity
+            if entity in entity_dict.keys():
                 continue
-            entity = entity[0][1:-1].strip()
-
             entity_no = ''
-            if '兴趣点 推荐' in gi:
+            if '兴趣点 推荐' == gi[1]:
                 entity_no = 'restaurant_' + str(entity_cnt)
                 entity_cnt += 1
-            if '电影 推荐' in gi:
+            if '电影 推荐' == gi[1]:
                 entity_no = 'movie_' + str(entity_cnt)
                 entity_cnt += 1
-            if '播放 音乐' in gi:
+            if '播放 音乐' == gi[1] or '音乐 推荐' == gi[1]:
                 entity_no = 'song_' + str(entity_cnt)
                 entity_cnt += 1
             if entity_no == '':
@@ -158,9 +184,9 @@ for i in x:
         len_src += 1
 
     # add reverse knowledge
-    for j in range(len(kg)):
-        if kg[j][1] in ['生日', '演唱', '导演', '主演', '星座']:
-            kg.append([kg[j][2], kg[j][1], kg[j][0]])
+    # for j in range(len(kg)):
+        # if kg[j][1] in ['生日', '演唱', '导演', '主演', '星座']:
+            # kg.append([kg[j][2], kg[j][1], kg[j][0]])
 
     for j in range(len(kg)):
 
@@ -187,29 +213,54 @@ for i in x:
     used_k = set()  # used string-format knowledge tuple in previous conversation
 
     goal_stage_milestone = set()
-    for j in range(len(conversation)-1):
+    for j in range(len(conversation)-2):
         if conversation[j][0] == '[':
             goal_stage_milestone.add(j)
-            conversation[j] = conversation[j][4:]
+            current_goal_stage = len(goal_stage_milestone)
+            # conversation[j] = conversation[j][4:]
         using_k = set()  # bot need these knowledge tuples to answer
         user_round = user_first ^ (j & 1)  # True if it were user speaking
         qa = conversation[j].strip() + ' ' + conversation[j + 1].strip()
         history = ' '.join(conversation[:j])
+
+        # find the recommend song or movie
+        # print(goal_info[current_goal_stage-1:], conversation[j+1])
+        recommend_stage = '推荐' in goal_info[current_goal_stage - 1][1] or (conversation[j + 1][0] == '[' and '推荐' in
+                     goal_info[current_goal_stage][1])
+        recommend_item = ''
+        for gi in goal_info[current_goal_stage-1:current_goal_stage+1]:
+            if len(gi) == 3 and type(gi[2]) is type(list()):
+                for r in gi[2]:
+                    r = entity_dict[r]
+                    if r in conversation[j+1] and r not in history:
+                        recommend_item = r
+                        break
+
+        # print(recommend_item, goal_info[current_goal_stage-1:current_goal_stage+1], entity_dict, qa)
         for k in kg:
-            if str(k) in used_k:  # assume that no knowledge will be used twice
+            if str(k[:3]) in used_k:  # assume that no knowledge will be used twice
+                continue
+
+            if ('天气' in conversation[j] and validate(k[1])) or \
+                    ('适合' in k[1] and j == 2) or \
+                    ('生日' == k[1] and goal_info[0][1] == '问 日期' and j == 2):
+                using_k.add(str(k[:3]))
                 continue
             score = cal_score(k, history + ' ' + conversation[j].strip(), conversation[j+1].strip())
 
 
             if score > max(2, cal_score(k, history, conversation[j].strip())):  # this knowledge might appear and not appear before
+                used_k.add(str(k[:3]))
                 if k[1] in difficult_info_mask.keys() and k[2] in conversation[j+1]:
-                    conversation[j+1] = conversation[j+1].replace(k[2], difficult_info_mask[k[1]])
+                    conversation[j+1] = conversation[j+1].replace(' ' + k[2] + ' ', ' ' + difficult_info_mask[k[1]] + ' ')
                     # print(conversation[j+1])
                     k[2] = difficult_info_mask[k[1]]
+                if k[1] == '评论':
+                    k[2] = k[2][:88]
                 if user_round:  # we only need simulate bot
                     using_k.add(str(k[:3]))  # using sest to remove redundant tuple such as multiple celebrity birthday
-                if score > 3:
-                    used_k.add(str(k[:3]))  # the knowledge is fully explored
+                # if score > 3:
+                    # the knowledge is fully explored
                     #  consider the celebrity birthday cases.
                     #  First, the date today is asked and answered. However,
                     #  the celebrity birthday tuple would also be partially matched.
@@ -219,10 +270,33 @@ for i in x:
             using_k = {i['situation']}
 
         if user_round:
+            # add goal transition
+            goal_transition = str(goal_info[current_goal_stage - 1:current_goal_stage + 1])
+            for k, v in zip(entity_dict.keys(), entity_dict.values()):
+                goal_transition = goal_transition.replace(k, v)
+            print(goal_transition, end=args.knowledge_sep, file=src)
             if len(using_k) != 0:
+                # use only comment knowledge when recommending
+                if recommend_item != '':
+                    best_comment = ''
+                    max_bleu = -1.0
+                    for uk in using_k:
+                        if recommend_item in uk and '评论' in uk:
+                            uk = eval(uk)
+                            comment = uk[2]
+                            bleu = sacrebleu.corpus_bleu([conversation[j+1]], [[comment]]).score
+                            # print(bleu, comment)
+                            if bleu > max_bleu:
+                                max_bleu = bleu
+                                best_comment = str(uk)
+                    if best_comment == '':
+                        print(best_comment, qa)
+                    using_k = {best_comment}
                 print(*using_k, sep=args.knowledge_sep, end='', file=src)  # knowledge at the beginning of user question
             print(args.knowledge_end, end='', file=src)
             if 0 < j < len(conversation) - 2 and (len(using_k) == 0 or args.force_history):  # say good bye need not history information
+
+                # add history
                 add_history = []
                 pos_h = j - 1
                 delta_goal_stage = 0
@@ -235,7 +309,7 @@ for i in x:
                         if delta_goal_stage >= args.max_goal_stage_in_history:
                             break
 
-                print(*add_history, sep='\t', end='\t', file=src)
+                print(*add_history[::-1], sep='\t', end='\t', file=src)
         print(conversation[j] + args.goal_stage_sep, file=src if user_round else tgt)
         if user_round:
             len_src += 1
