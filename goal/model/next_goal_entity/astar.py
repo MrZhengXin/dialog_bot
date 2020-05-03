@@ -137,21 +137,21 @@ class AStarEntity(nn.Module):
             # utt_seq_embed = self.utt_embedding(past_utt)
             # utt_seq_output = self.apply_rnn(utt_seq_embed, utt_lengths, self.utt_rnn)
 
-            cur_goal_embed = self.entity_embedding(cur_entity)
+            # cur_goal_embed = self.entity_embedding(cur_entity)
+            # cur_cost_embed = torch.cat([entity_seq_output, cur_goal_embed], dim=-1)
             last_goal_embed = self.entity_embedding(last_entity)
-            cur_cost_embed = torch.cat([entity_seq_output, cur_goal_embed], dim=-1)
             last_cost_embed = torch.cat([entity_seq_output, last_goal_embed], dim=-1)
 
             # cur_cost = F.dropout(torch.relu(self.fc1(cur_cost_embed)), 0.05)
-            cur_cost = torch.relu(self.fc1(cur_cost_embed))
-            cur_cost = torch.sigmoid(self.fc2(cur_cost))
+            # cur_cost = torch.relu(self.fc1(cur_cost_embed))
+            # cur_cost = torch.sigmoid(self.fc2(cur_cost))
 
             # remain_cost = F.dropout(torch.relu(self.fc1(last_cost_embed)), 0.05)
             remain_cost = torch.relu(self.fc1(last_cost_embed))
             remain_cost = torch.sigmoid(self.fc2(remain_cost))
 
-            out = 0.5 * cur_cost + 0.5 * remain_cost
-
+            # out = 0.5 * cur_cost + 0.5 * remain_cost
+            out = remain_cost
             # return out
 
             # Put the output back in correct order
@@ -173,19 +173,19 @@ class AStarEntity(nn.Module):
             # out = torch.relu(self.fc1(seq_out))
             # out = torch.sigmoid(self.fc2(out))
 
-            cur_goal_embed = self.entity_embedding(cur_entity)
+            # cur_goal_embed = self.entity_embedding(cur_entity)
+            # cur_cost_embed = torch.cat([seq_out, cur_goal_embed], dim=-1)
             last_goal_embed = self.entity_embedding(last_entity)
-            cur_cost_embed = torch.cat([seq_out, cur_goal_embed], dim=-1)
             last_cost_embed = torch.cat([seq_out, last_goal_embed], dim=-1)
 
             # cur_cost = F.dropout(torch.relu(self.fc1(cur_cost_embed)), 0.05)
-            cur_cost = torch.relu(self.fc1(cur_cost_embed))
-            cur_cost = torch.sigmoid(self.fc2(cur_cost))
+            # cur_cost = torch.relu(self.fc1(cur_cost_embed))
+            # cur_cost = torch.sigmoid(self.fc2(cur_cost))
 
             # remain_cost = F.dropout(torch.relu(self.fc1(last_cost_embed)), 0.05)
             remain_cost = torch.relu(self.fc1(last_cost_embed))
             remain_cost = torch.sigmoid(self.fc2(remain_cost))
 
-            out = 0.5 * cur_cost + 0.5 * remain_cost
-
+            # out = 0.5 * cur_cost + 0.5 * remain_cost
+            out = remain_cost
             return out

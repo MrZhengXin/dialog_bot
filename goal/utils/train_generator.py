@@ -34,7 +34,7 @@ class Dataset(object):
                     if self.utterance[idx][max(0, jdx-2)]:
                     # if self.utterance[idx][0]:
                         utt_flat = [utt for utts in self.utterance[idx][max(0, jdx-2):jdx] for utt in utts]
-                        utt_flat = [utt for utts in self.utterance[idx][:jdx] for utt in utts]
+                        # utt_flat = [utt for utts in self.utterance[idx][:jdx] for utt in utts]
                         binary_utterance.append(utt_flat)
                         binary_goal_type.append(self.goal_type[idx][jdx - 1])
                         bianry_label.append(self.label[idx][jdx])

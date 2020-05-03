@@ -122,21 +122,21 @@ class AStarType(nn.Module):
             # out = torch.relu(self.fc1(output))
             # out = torch.sigmoid(self.fc2(out))
 
-            cur_goal_embed = self.goal_embedding(cur_goal)[permutation_indices]
+            # cur_goal_embed = self.goal_embedding(cur_goal)[permutation_indices]
+            # cur_cost_embed = torch.cat([output, cur_goal_embed], dim=-1)
             last_goal_embed = self.goal_embedding(last_goal)[permutation_indices]
-            cur_cost_embed = torch.cat([output, cur_goal_embed], dim=-1)
             last_cost_embed = torch.cat([output, last_goal_embed], dim=-1)
 
             # cur_cost = F.dropout(torch.relu(self.fc1(cur_cost_embed)), 0.05)
-            cur_cost = torch.relu(self.fc1(cur_cost_embed))
-            cur_cost = torch.sigmoid(self.fc2(cur_cost))
+            # cur_cost = torch.relu(self.fc1(cur_cost_embed))
+            # cur_cost = torch.sigmoid(self.fc2(cur_cost))
 
             # remain_cost = F.dropout(torch.relu(self.fc1(last_cost_embed)), 0.05)
             remain_cost = torch.relu(self.fc1(last_cost_embed))
             remain_cost = torch.sigmoid(self.fc2(remain_cost))
 
-            out = 0.5 * cur_cost + 0.5 * remain_cost
-
+            # out = 0.5 * cur_cost + 0.5 * remain_cost
+            out = remain_cost
             # Put the output back in correct order
             permutation_index_pairs = list(zip(
                 permutation_indices.tolist(),
@@ -156,20 +156,20 @@ class AStarType(nn.Module):
             # out = torch.relu(self.fc1(seq_out))
             # out = torch.sigmoid(self.fc2(out))
 
-            cur_goal_embed = self.goal_embedding(cur_goal)
-            last_goal_embed = self.goal_embedding(last_goal)
-            cur_cost_embed = torch.cat([seq_out, cur_goal_embed], dim=-1)
+            # cur_goal_embed = self.goal_embedding(cur_goal)
+            # cur_cost_embed = torch.cat([seq_out, cur_goal_embed], dim=-1)
             # print(seq_out.shape, last_goal_embed.shape)
+            last_goal_embed = self.goal_embedding(last_goal)
             last_cost_embed = torch.cat([seq_out, last_goal_embed], dim=-1)
 
             # cur_cost = F.dropout(torch.relu(self.fc1(cur_cost_embed)), 0.05)
-            cur_cost = torch.relu(self.fc1(cur_cost_embed))
-            cur_cost = torch.sigmoid(self.fc2(cur_cost))
+            # cur_cost = torch.relu(self.fc1(cur_cost_embed))
+            # cur_cost = torch.sigmoid(self.fc2(cur_cost))
 
             # remain_cost = F.dropout(torch.relu(self.fc1(last_cost_embed)), 0.05)
             remain_cost = torch.relu(self.fc1(last_cost_embed))
             remain_cost = torch.sigmoid(self.fc2(remain_cost))
 
-            out = 0.5 * cur_cost + 0.5 * remain_cost
-
+            # out = 0.5 * cur_cost + 0.5 * remain_cost
+            out = remain_cost
             return out
