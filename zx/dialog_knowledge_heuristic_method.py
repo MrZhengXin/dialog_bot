@@ -16,9 +16,9 @@ parser.add_argument('--force_history', type=bool, default=False, help='normally 
 would needed')
 parser.add_argument('--max_history_length', type=int, default=128)
 parser.add_argument('--max_goal_stage_in_history', type=int, default=1)
-parser.add_argument('--train_json', type=str, default='dev.json')
-parser.add_argument('--train_source_file', type=str, default='valid_with_knowledge.src')
-parser.add_argument('--train_target_file', type=str, default='valid_with_knowledge.tgt')
+parser.add_argument('--train_json', type=str, default='train.json')
+parser.add_argument('--train_source_file', type=str, default='train_with_knowledge.src')
+parser.add_argument('--train_target_file', type=str, default='train_with_knowledge.tgt')
 
 args = parser.parse_args()
 
@@ -90,7 +90,7 @@ def cal_score(triple, q, a):
     if len(triple[2]) == 0 or len(triple[3]) == 0:
         return 0  # something empty like ["异灵灵异-2002", "评论", ""]
     qa = q + ' ' + a
-    score = 1 if (triple[0] in qa.replace(' ', '') or ('天气' == triple[1] and '天气' in q)) else -1  # left entity appears
+    score = 1 if (triple[0].replace(' ', '') in qa.replace(' ', '') or ('天气' == triple[1] and '天气' in q)) else -1  # left entity appears
     score += check_relation(triple[1], a)  # relation appears
     if triple[1] == '出生地' and score < 2:
         score -= 4  # probably not use birthplace knowledege
@@ -119,6 +119,7 @@ difficult_info_mask = {'身高': 'height', '体重': 'weight', '评分': 'rating
 news_response = dict()
 select_comments_dict = dict()
 comments_score = dict()
+problembatic_entity = set()
 for i in x:
     i = json.loads(i)
     conversation = i['conversation']
@@ -163,9 +164,13 @@ for i in x:
                 continue
             entity_dict[entity] = entity_no
 
+            entity_appear = False
             for j in range(len(conversation)):
                 if entity in conversation[j]:
+                    entity_appear = True
                     conversation[j] = conversation[j].replace(entity, entity_no)
+            if not entity_appear:
+                problembatic_entity.add(entity)
             for j in range(len(kg)):
                 if kg[j][0].replace(' ', '') == entity.replace(' ', ''):
                     kg[j][0] = entity_no
@@ -350,6 +355,7 @@ for i in x:
         len_tgt += 1
     assert len_src == len_tgt
 
+print(problembatic_entity)
 '''
 with open('dialog_news_response.txt', 'w') as f:
     print(news_response, file=f)
