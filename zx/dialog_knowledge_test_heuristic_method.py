@@ -150,10 +150,11 @@ for i in x:
             entity_cnt += 1
             continue
         if action in ['电影 推荐', '音乐 推荐']:
-
-            for r in g[2]:
+            entity_cnt += 2
+            for r in g[2][::-1]:
+                entity_cnt -= 1
                 entity_dict[r] = ('movie_' if action == '电影 推荐' else 'song_') + str(entity_cnt)
-                entity_cnt += 1
+            entity_cnt += 2
             continue
 
     # add goal transition
@@ -246,10 +247,11 @@ for i in x:
             continue
 
         if check_relation(kg[j][1], question) and kg[j][0] != i['user_profile']['姓名'] and\
-                (((kg[j][0].replace(' ', '') in conversation.replace(' ', '')) or (kg[j][2].replace(' ', '') in conversation.replace(' ', ''))) or \
-                 ((kg[j][0].replace(' ', '') in conversation.replace(' ', '')) and kg[j][2].isdigit())):
-            if kg[j][0] in entity_dict.keys():
-                kg[j][0] = entity_dict[kg[j][0]]
+                ( remove_marks(kg[j][0]) in remove_marks(conversation) ) ^ ( remove_marks(kg[j][2]) in remove_marks(conversation)): # or \
+                 # ((kg[j][0].replace(' ', '') in conversation.replace(' ', '')) and kg[j][2].isdigit())):
+            for key in entity_dict.keys():
+                if remove_marks(kg[j][0]) == remove_marks(key):
+                    kg[j][0] = entity_dict[key]
             using_k.add(str(kg[j]))
             # if kg[j][1] == '新闻':
                 # news[num] = kg[j][2]
