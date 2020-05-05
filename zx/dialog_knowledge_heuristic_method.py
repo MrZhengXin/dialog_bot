@@ -119,8 +119,10 @@ difficult_info_mask = {'身高': 'height', '体重': 'weight', '评分': 'rating
 news_response = dict()
 select_comments_dict = dict()
 comments_score = dict()
-problembatic_entity = set()
+problembatic_entity = dict()
+line_no = 0
 for i in x:
+    line_no += 1
     i = json.loads(i)
     conversation = i['conversation']
     goal = i['goal'].split(' --> ')
@@ -146,35 +148,42 @@ for i in x:
         if len(gi) != 3:
             continue
         entities = gi[2] if type(gi[2]) is type(list()) else [gi[2]]
-        for entity in entities:
+        entity_cnt += len(entities)
+        for entity in entities[::-1]:
             # no redundant entity
             if entity in entity_dict.keys():
                 continue
             entity_no = ''
             if '兴趣点 推荐' == gi[1]:
+                entity_cnt -= 1
                 entity_no = 'restaurant_' + str(entity_cnt)
-                entity_cnt += 1
             if '电影 推荐' == gi[1]:
+                entity_cnt -= 1
                 entity_no = 'movie_' + str(entity_cnt)
-                entity_cnt += 1
             if '播放 音乐' == gi[1] or '音乐 推荐' == gi[1]:
+                entity_cnt -= 1
                 entity_no = 'song_' + str(entity_cnt)
-                entity_cnt += 1
             if entity_no == '':
                 continue
             entity_dict[entity] = entity_no
 
+            # solve recuresive　name like 欺诈 的 碎片 与 惊心 的 情感 ： 《 色 · 戒 》 纪实 and 色 · 戒
             entity_appear = False
             for j in range(len(conversation)):
                 if entity in conversation[j]:
                     entity_appear = True
                     conversation[j] = conversation[j].replace(entity, entity_no)
             if not entity_appear:
-                problembatic_entity.add(entity)
+                if entity not in problembatic_entity.keys():
+                    problembatic_entity[entity] = [line_no]
+                else:
+                    problembatic_entity[entity].append(line_no)
             for j in range(len(kg)):
                 if kg[j][0].replace(' ', '') == entity.replace(' ', ''):
                     kg[j][0] = entity_no
                 kg[j][2] = kg[j][2].replace(entity, entity_no)
+        entity_cnt += len(entities)
+
 
 
 
