@@ -16,9 +16,9 @@ parser.add_argument('--force_history', type=bool, default=False, help='normally 
 would needed')
 parser.add_argument('--max_history_length', type=int, default=128)
 parser.add_argument('--max_goal_stage_in_history', type=int, default=1)
-parser.add_argument('--train_json', type=str, default='dialog_example.json')
-parser.add_argument('--train_source_file', type=str, default='example_with_knowledge.src')
-parser.add_argument('--train_target_file', type=str, default='example_with_knowledge.tgt')
+parser.add_argument('--train_json', type=str, default='dev.json')
+parser.add_argument('--train_source_file', type=str, default='valid_with_knowledge.src')
+parser.add_argument('--train_target_file', type=str, default='valid_with_knowledge.tgt')
 
 args = parser.parse_args()
 
@@ -262,8 +262,9 @@ for i in x:
                     # print(k[2], conversation[j+1])
                 used_k.add(str(k[:3]))
                 if k[1] in difficult_info_mask.keys() and k[2] in conversation[j+1]:
-                    conversation[j+1] = conversation[j+1].replace(' ' + k[2] + ' ', ' ' + difficult_info_mask[k[1]] + ' ').\
-                        replace(' ' + k[2], ' ' + difficult_info_mask[k[1]]).replace(k[2], ' ' + difficult_info_mask[k[1]])
+                    conversation[j+1] = re.sub('(^'+k[2]+')|( '+k[2] + ' )|( ' + k[2] + '$)', ' ' + difficult_info_mask[k[1]] + ' ', conversation[j+1])
+                    # print(conversation[j+1])
+                    # conversation[j+1].replace(' ' + k[2] + ' ', ' ' + difficult_info_mask[k[1]] + ' ')
                     # print(conversation[j+1])
                     k[2] = difficult_info_mask[k[1]]
                 if k[1] == '评论':
