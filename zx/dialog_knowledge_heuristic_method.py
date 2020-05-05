@@ -267,7 +267,7 @@ for i in x:
                     # print(conversation[j+1])
                     k[2] = difficult_info_mask[k[1]]
                 if k[1] == '评论':
-                    k[2] = k[2][-196:]
+                    k[2] = k[2][:88]
                 if user_round:  # we only need simulate bot
                     using_k.add(str(k[:3]))  # using sest to remove redundant tuple such as multiple celebrity birthday
                 if '新闻' in k[1]:  # avoid multiple news knowledge
