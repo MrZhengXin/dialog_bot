@@ -145,7 +145,7 @@ for i in x:
         if len(gi) == 4:  # news
             kg.append([gi[2], '新闻', gi[3]])
             continue
-        if len(gi) != 3:
+        if len(gi) != 3 or gi[1] not in ['兴趣点 推荐', '电影 推荐', '播放 音乐', '音乐 推荐']:
             continue
         entities = gi[2] if type(gi[2]) is type(list()) else [gi[2]]
         entity_cnt += len(entities)
@@ -182,7 +182,7 @@ for i in x:
                 if kg[j][0].replace(' ', '') == entity.replace(' ', ''):
                     kg[j][0] = entity_no
                 kg[j][2] = kg[j][2].replace(entity, entity_no)
-        entity_cnt += len(entities)
+        entity_cnt += len(entity_dict)
 
 
 
