@@ -16,9 +16,9 @@ parser.add_argument('--force_history', type=bool, default=False, help='normally 
 would needed')
 parser.add_argument('--max_history_length', type=int, default=128)
 parser.add_argument('--max_goal_stage_in_history', type=int, default=1)
-parser.add_argument('--train_json', type=str, default='train.json')
-parser.add_argument('--train_source_file', type=str, default='train_with_knowledge.src')
-parser.add_argument('--train_target_file', type=str, default='train_with_knowledge.tgt')
+parser.add_argument('--train_json', type=str, default='dialog_example.json')
+parser.add_argument('--train_source_file', type=str, default='example_with_knowledge.src')
+parser.add_argument('--train_target_file', type=str, default='example_with_knowledge.tgt')
 
 args = parser.parse_args()
 
@@ -262,11 +262,12 @@ for i in x:
                     # print(k[2], conversation[j+1])
                 used_k.add(str(k[:3]))
                 if k[1] in difficult_info_mask.keys() and k[2] in conversation[j+1]:
-                    conversation[j+1] = conversation[j+1].replace(' ' + k[2] + ' ', ' ' + difficult_info_mask[k[1]] + ' ')
+                    conversation[j+1] = conversation[j+1].replace(' ' + k[2] + ' ', ' ' + difficult_info_mask[k[1]] + ' ').\
+                        replace(' ' + k[2], ' ' + difficult_info_mask[k[1]]).replace(k[2], ' ' + difficult_info_mask[k[1]])
                     # print(conversation[j+1])
                     k[2] = difficult_info_mask[k[1]]
                 if k[1] == '评论':
-                    k[2] = k[2][:88]
+                    k[2] = k[2][-196:]
                 if user_round:  # we only need simulate bot
                     using_k.add(str(k[:3]))  # using sest to remove redundant tuple such as multiple celebrity birthday
                 if '新闻' in k[1]:  # avoid multiple news knowledge
@@ -317,8 +318,8 @@ for i in x:
                                     select_comments_dict[song] = str(uk).replace(entity_dict[song], song)
                                     comments_score[song] = bleu
                                 best_comment = str(uk)
-                    if best_comment == '':
-                        print(best_comment, qa)
+                    # if best_comment == '':
+                    # print(max_bleu, best_comment, qa)
                     using_k = {best_comment}
                 print(*using_k, sep=args.knowledge_sep, end='', file=src)  # knowledge at the beginning of user question
             print(args.knowledge_end, end='', file=src)
@@ -338,7 +339,6 @@ for i in x:
                             break
 
                 print(*add_history[::-1], sep='\t', end='\t', file=src)
-        response = conversation[j]
         print(conversation[j] + args.goal_stage_sep, file=src if user_round else tgt)
         if user_round:
             len_src += 1
@@ -349,8 +349,9 @@ for i in x:
         len_tgt += 1
     assert len_src == len_tgt
 
+'''
 with open('dialog_news_response.txt', 'w') as f:
     print(news_response, file=f)
 
 with open('dialog_select_comment_dict.txt', 'w') as f:
-    print(select_comments_dict, file=f)
+    print(select_comments_dict, file=f)'''
