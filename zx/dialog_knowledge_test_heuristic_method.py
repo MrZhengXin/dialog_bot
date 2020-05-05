@@ -1,4 +1,3 @@
-
 import json
 import datetime
 import re
@@ -164,11 +163,11 @@ for i in x:
         goal_transition[0][3] = ''
     if len(goal_transition) > 1 and '新闻' in goal_transition[1][1]:
         goal_transition[1][3] = ''
-    if goal_transition[0][1] in ['音乐 推荐', '播放 音乐'] or '电影' in goal_transition[0][1]:
+    if goal_transition[0][1] in ['音乐 推荐', '播放 音乐'] or '电影' in goal_transition[0][1] or '兴趣点 推荐' == goal_transition[0][1]:
         # print(goal_transition[0])
         goal_transition[0][2] = [entity_dict[e] for e in goal_transition[0][2]] if \
                                  type(goal_transition[0][2]) is type(list()) else entity_dict[goal_transition[0][2]]
-    if len(goal_transition) > 1 and (goal_transition[1][1] in ['音乐 推荐', '播放 音乐'] or '电影' in goal_transition[1][1]):
+    if len(goal_transition) > 1 and (goal_transition[1][1] in ['音乐 推荐', '播放 音乐'] or '电影' in goal_transition[1][1] or '兴趣点 推荐' == goal_transition[1][1]):
         goal_transition[1][2] = [entity_dict[e] for e in goal_transition[1][2]] if \
                                 type(goal_transition[1][2]) is type(list()) else entity_dict[goal_transition[1][2]]
     goal_transition = str(goal_transition)
@@ -205,7 +204,7 @@ for i in x:
                 if remove_marks(r) not in remove_marks(conversation):
                     if r in select_comments_dict.keys():
                         comment = select_comments_dict[r].replace(r, entity_dict[r])
-                        print(comment)
+                        # print(comment)
                     if action == '电影 推荐':
                         recommend_movie = r
                         recommend_entity = entity_dict[r]
@@ -314,7 +313,7 @@ for i in x:
     entity_dicts.append(entity_dict)
 
 
-with open('test_hypo_entity (8).txt', 'r') as f:
+with open('test_hypo_entity (10).txt', 'r') as f:
     x = f.readlines()
 
 with open('dialog_news_response_2.txt', 'r') as f:
