@@ -153,8 +153,10 @@ for i in x:
             entity_cnt += 2
             for r in g[2][::-1]:
                 entity_cnt -= 1
+                if r in entity_dict.keys():
+                    continue
                 entity_dict[r] = ('movie_' if action == '电影 推荐' else 'song_') + str(entity_cnt)
-            entity_cnt += 2
+            entity_cnt = len(entity_dict)
             continue
 
     # add goal transition
@@ -315,14 +317,14 @@ for i in x:
     entity_dicts.append(entity_dict)
 
 
-with open('test_hypo_entity (10).txt', 'r') as f:
+with open('test_hypo_entity (13).txt', 'r') as f:
     x = f.readlines()
 
 with open('dialog_news_response_2.txt', 'r') as f:
     news_response = f.readline()
     news_response = eval(news_response)
 
-gg = open('mbart_knowledge_input_no_history_entity_0504.txt', 'w')
+gg = open('mbart_knowledge_input_no_history_entity_0506.txt', 'w')
 for i in range(len(x)):
     x[i] = x[i].strip()
     x[i] = x[i].replace(',', '，').replace('?', '？').replace('!', '！').replace('°C', '℃').\
