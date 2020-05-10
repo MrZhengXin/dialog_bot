@@ -30,7 +30,7 @@ def fill_goal(i):
     singer = ''
     news_of = ''
     news = ''
-    actor= ''
+    actor = ''
     for j in kg:
         entity, relation, info = j
         if relation == '新闻':
@@ -41,7 +41,7 @@ def fill_goal(i):
         if relation == '生日':
             birthday_person = entity
         # However, there is a strange movie "20   30   40"
-        if relation == '主演' and info.find('   ') == -1 and info not in goal[0]:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
+        if relation == '主演' and info.find('   ') == -1 and info not in goal[0] and info not in goal[1]:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
             movies.add(info)
             actor = entity
         if relation == '地址':
@@ -71,17 +71,15 @@ def fill_goal(i):
     if goal[2].startswith('[5] 再见'):
         if goal[1].startswith('[4] 新闻 推荐'):  #(3):1 寒暄  2 音乐 推荐  3 关于 明星 的 聊天  4 新闻 推荐
             celebrity = re.findall('『[^』]*』', goal[1])[0][2:-2]
-            goal_fill = [[2, '音乐 推荐', songs], [3, '关于 明星 的 聊天', celebrity]]
+            goal_fill = [[2, '音乐 推荐', list(songs)], [3, '关于 明星 的 聊天', celebrity]]
         if goal[1].startswith('[4] 电影 推荐'):
-            movies_4 = re.findall('『[^』]*』', goal[1])[0][2:-2]
-            movies.remove(movies_4)
             if goal[0].startswith('[1] 问答'):  # (9):1 问答  2 关于 明星 的 聊天  3 电影 推荐  4 电影 推荐
                 celebrity = re.findall('『[^』]*』', goal[0])[1][2:-2]
-                goal_fill = [[2, '关于 明星 的 聊天', celebrity], [3, '电影 推荐', movies]]
+                goal_fill = [[2, '关于 明星 的 聊天', celebrity], [3, '电影 推荐', list(movies)]]
             if goal[0].startswith('[1] 问 日期'):  # (10):1 问 日期  2 关于 明星 的 聊天  3 电影 推荐  4 电影 推荐
-                goal_fill = [[2, '关于 明星 的 聊天', birthday_person], [3, '电影 推荐', movies]]
+                goal_fill = [[2, '关于 明星 的 聊天', birthday_person], [3, '电影 推荐', list(movies)]]
             if goal[0].startswith('[1] 寒暄'):  # (11):1 寒暄  2 音乐 推荐  3 关于 明星 的 聊天  4 电影 推荐
-                goal_fill = [[2, '音乐 推荐', songs], [3, '关于 明星 的 聊天', singer]]
+                goal_fill = [[2, '音乐 推荐', list(songs)], [3, '关于 明星 的 聊天', singer]]
         if goal[1].startswith('[4] 播放 音乐'):  # (19):1 问答  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐  (20):1 问 日期  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐
             play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
             songs.remove(play_song)
@@ -95,9 +93,9 @@ def fill_goal(i):
         goal_fill = [[2, '问 User 姓名'],  [3, '问 User 性别'],  [4, '问 User 年龄']]
     if goal[1].startswith('[5] 电影 推荐'):
         if news_of == '':  # (8):1 寒暄  2 提问  3 提问  4 关于 明星 的 聊天  5 电影 推荐
-            goal_fill = [[2, '提问'], [3, '提问'], [4, '关于 明星 的 聊天', '']]
+            goal_fill = [[2, '提问'], [3, '提问'], [4, '关于 明星 的 聊天', actor]]
         else:  # (7):1 寒暄  2 新闻 推荐  3 关于 明星 的 聊天  4 电影 推荐  5 电影 推荐
-            goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '电影 推荐']]
+            goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '电影 推荐', list(movies)]]
     if goal[1].startswith('[5] 播放 音乐'):  # (16):1 问 日期  2 关于 明星 的 聊天  3 电影 推荐  4 音乐 推荐  5 播放 音乐
         play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
         songs.remove(play_song)
@@ -107,9 +105,9 @@ def fill_goal(i):
                 celebrity = birthday_person
             else:  # (15):1 问答  2 关于 明星 的 聊天  3 电影 推荐  4 音乐 推荐  5 播放 音乐
                 celebrity = re.findall('『[^』]*』', goal[0])[1][2:-2]
-            goal_fill = [[2, '关于 明星 的 聊天', celebrity], [3, '电影 推荐', movies], [4, '音乐 推荐', songs]]
+            goal_fill = [[2, '关于 明星 的 聊天', celebrity], [3, '电影 推荐', list(movies)], [4, '音乐 推荐', songs]]
         if len(movies) != 0:  # (18):1 寒暄  2 电影 推荐  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
-            goal_fill = [[2, '电影 推荐', movies], [3, '关于 明星 的 聊天', actor], [4, '音乐 推荐', songs]]
+            goal_fill = [[2, '电影 推荐', list(movies)], [3, '关于 明星 的 聊天', actor], [4, '音乐 推荐', songs]]
         else:  # (17):1 寒暄  2 提问  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
             goal_fill = [[2, '提问'], [3, '关于 明星 的 聊天', singer], [4, '音乐 推荐', songs]]
     return goal_fill
@@ -138,14 +136,14 @@ def extract_info_from_goal(goal):
     return [no, action]
 
 
-for i in x:
-    i = json.loads(i)
+def fill_test(i):
+
     goals_fill = fill_goal(i)
     goals = i['goal']
     goals_info = [extract_info_from_goal(j) for j in goals.split(' --> ')]
     if len(goals_fill) == 0:
-        print(goals_info, file=f)
+        return goals_info
     else:
         goals_info_complete = [goals_info[0]] + goals_fill + goals_info[1:]
-        print(goals_info_complete, file=f)
+        return goals_info_complete
 
