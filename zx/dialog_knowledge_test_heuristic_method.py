@@ -2,6 +2,8 @@ import json
 import datetime
 import re
 import random
+import goal_filling
+import sacrebleu
 
 
 eq_relations = {
@@ -71,22 +73,26 @@ random.seed()
 with open('test_1.json', 'r') as f:
     x = f.readlines()
 
-with open('test_1_goal_fill.txt', 'r') as f:
-    goals_info = f.readlines()
-    goals_info = [eval(i) for i in goals_info]
+goals_info = []
 
 with open('dialog_select_comment_dict.txt', 'r') as f:
     select_comments_dict = f.readline()
     select_comments_dict = eval(select_comments_dict)
 
+with open('dialog_comment_recommends_merge.txt', 'r') as f:
+    comment_recommends = f.readline()
+    comment_recommends = eval(comment_recommends)
+
 src = open('test_with_knowledge.src', 'w')
 
 num = -1
 weather_dict = dict()
+recommend_round = dict()
 mask_info = dict()
 entity_dicts = []
 news_dict = dict()
 questions = []
+multi_actors_answers = dict()
 for i in x:
     num += 1
     # i = i.replace(' ', '')
@@ -103,7 +109,11 @@ for i in x:
         print(hello_info, file=src)
         entity_dicts.append(dict())
         questions.append('')
+        goals_info.append(goal_filling.fill_test(i))
         continue
+
+    goal = goal_filling.fill_test(i)
+    goals_info.append(goal)
 
     if len(i['history']) == 1 and ('问 时间' in goal[0] or '问 日期' in goal[0]):
         print(i['situation'], i['history'][0], file=src)
@@ -111,7 +121,6 @@ for i in x:
         questions.append('')
         continue
 
-    goal = goals_info[num]
     kg = i['knowledge']
     # fix bug when song contain "   "
     for j in range(len(kg)):
@@ -120,6 +129,11 @@ for i in x:
             kg[j][1] = '评论'
     conversation = ' '.join(i['history'])
     current_goal_stage = len(re.findall('\[[1-9]\]', conversation))
+    current_goal_length = 0
+    for j in i['history'][::-1]:
+        current_goal_length += 1
+        if j[0] == '[':
+            break
     current_round = 0
     for u in i['history'][::-1]:
         # if goal[current_goal_stage-1][1] == '关于 明星 的 聊天':
@@ -150,7 +164,7 @@ for i in x:
             entity_cnt += 1
             continue
         if action in ['电影 推荐', '音乐 推荐']:
-            entity_cnt += 2
+            entity_cnt += len(g[2])
             for r in g[2][::-1]:
                 entity_cnt -= 1
                 if r in entity_dict.keys():
@@ -192,9 +206,15 @@ for i in x:
         entity_dicts.append(dict())
         questions.append(question)
         continue
+
     # recommend movie, song, restaurant
     recommend_movie, recommend_song, recommend_restaurant, broadcast_news = '', '', '', []
-    for g in goal[current_goal_stage - 1:current_goal_stage + 1]:  # search the first entity not appeared in conversation
+    next_goal = [goal[current_goal_stage - 1]]
+    if (goal[current_goal_stage - 1][1] == '关于 明星 的 聊天' and current_goal_length > 3) or \
+        (goal[current_goal_stage - 1][1] == '美食 推荐' and current_goal_length > 2) or \
+        (goal[current_goal_stage - 1][1] != '关于 明星 的 聊天' and goal[current_goal_stage - 1][1] != '美食 推荐' and current_goal_length > 1):
+        next_goal = goal[current_goal_stage - 1: current_goal_stage + 1]
+    for g in next_goal:  # search the first entity not appeared in conversation
         # from the current goal and the next goal
         if len(recommend_song) + len(recommend_movie) + len(recommend_restaurant) != 0:
             break
@@ -207,6 +227,7 @@ for i in x:
                 if remove_marks(r) not in remove_marks(conversation):
                     if r in select_comments_dict.keys():
                         comment = select_comments_dict[r].replace(r, entity_dict[r])
+                        recommend_round[num] = r
                         # print(comment)
                     if action == '电影 推荐':
                         recommend_movie = r
@@ -235,8 +256,8 @@ for i in x:
     for j in range(len(kg)):
         if max_knowledge == 0:
             break
-        if kg[j][1] == '评论' and len(kg[j][2]) > 64:
-            kg[j][2] = kg[j][2][:64]
+        if kg[j][1] == '评论' and len(kg[j][2]) > 88:
+            kg[j][2] = kg[j][2][:88]
         if (kg[j][0].replace(' ', '') in [recommend_movie.replace(' ', ''), recommend_song.replace(' ', '')] and kg[j][1] == '评论' and comment == '') or \
                 (kg[j][0].replace(' ', '') == recommend_restaurant.replace(' ', '') and kg[j][1] == '特色菜' and kg[j][2] in conversation):
 
@@ -245,16 +266,28 @@ for i in x:
 
         if kg[j][1] == '新闻':  # news knowledge is already handled
             continue
+        if kg[j][1] == '订单量':   # strange 
+            continue
         if str(kg[j]) in using_k:
             continue
 
         if check_relation(kg[j][1], question) and kg[j][0] != i['user_profile']['姓名'] and\
-                ( remove_marks(kg[j][0]) in remove_marks(conversation) ) ^ ( remove_marks(kg[j][2]) in remove_marks(conversation)): # or \
-                 # ((kg[j][0].replace(' ', '') in conversation.replace(' ', '')) and kg[j][2].isdigit())):
+                ( remove_marks(kg[j][0]) in remove_marks(conversation) ) ^ ( remove_marks(kg[j][2]) in remove_marks(conversation))or \
+                (kg[j][0].replace(' ', '') in conversation.replace(' ', '') and kg[j][2].isdigit() ):
             for key in entity_dict.keys():
                 if remove_marks(kg[j][0]) == remove_marks(key):
                     kg[j][0] = entity_dict[key]
             using_k.add(str(kg[j]))
+            if kg[j][1] == '主演' and '   'in kg[j][2]:
+                actors = kg[j][2].split('   ')
+                # print(actors)
+                if '还有' in question or '还 有些' in question:
+                    actors = [actor for actor in actors if actor not in conversation]
+                    answer = '主演 还有 ' + ' 、 '.join(actors) + ' 哦'
+                else:
+                    answer = '这部 电影 的 主演 有 ' + ' 、 '.join(actors) + ' 哦'
+                multi_actors_answers[num] = answer
+                    
             # if kg[j][1] == '新闻':
                 # news[num] = kg[j][2]
             # digits = re.findall('[0-9.]*', kg[j][2])
@@ -278,6 +311,7 @@ for i in x:
                     weather_dict[num] = kg[j][2]
                 print(kg[j], end='\t', file=src)
                 max_knowledge -= 1
+
 
     # replace entity in diaglog
     for j in range(len(i['history'])):
@@ -317,14 +351,14 @@ for i in x:
     entity_dicts.append(entity_dict)
 
 
-with open('test_hypo_entity (13).txt', 'r') as f:
+with open('test_hypo (4).txt', 'r') as f:
     x = f.readlines()
 
 with open('dialog_news_response_2.txt', 'r') as f:
     news_response = f.readline()
     news_response = eval(news_response)
 
-gg = open('mbart_knowledge_input_no_history_entity_0506.txt', 'w')
+gg = open('mbart_knowledge_input_no_history_entity_0511__.txt', 'w')
 for i in range(len(x)):
     x[i] = x[i].strip()
     x[i] = x[i].replace(',', '，').replace('?', '？').replace('!', '！').replace('°C', '℃').\
@@ -346,18 +380,27 @@ for i in range(len(x)):
         # print(news_dict[i].replace('    ', ' ').replace('   ', ' ').replace('  ', ' '), file=gg)
         continue
 
+    if i in multi_actors_answers.keys():
+        print(multi_actors_answers[i], file=gg)
+        continue
+
     if i in weather_dict.keys():
-        x[i] = x[i].replace(' 零下 ', '').replace(' ， ', ' ,   ').replace('℃ 最', '℃ ,   最').replace('风 最', '风 ,   最').replace(' ~ ', '到').replace(' ，', ' ,   ')
+        x[i] = x[i].replace(' 零下 ', '').replace(' ， ', ' ,   ').replace('℃ 最', '℃ ,   最').replace('风 最', '风 ,   最').replace(' ，', ' ,   ').replace('你 最高 气温', '最高 气温').replace('你 最低气温', '最低气温').replace('我 最高 气温', '最高 气温').replace('我 最低气温', '最低气温')        
         weather = weather_dict[i]
         true_temperature = re.findall('-? [0-9][0-9]? ', weather)
         generate_temperature = re.findall('-? [0-9][0-9]? ', x[i])
         if len(true_temperature) == len(generate_temperature) and true_temperature != generate_temperature:
-            x[i] = x[i].replace(generate_temperature[0], 'high').replace('high', true_temperature[0])
-            x[i] = x[i].replace(generate_temperature[1], 'low').replace('low', true_temperature[1])
+            x[i] = x[i].replace(generate_temperature[0], 'high')
+            x[i] = x[i].replace(generate_temperature[1], 'low')
+            x[i] = x[i].replace('high', true_temperature[0])
+            x[i] = x[i].replace('low', true_temperature[1])
+
 
         generate_temperature = re.findall('-? [0-9][0-9]? ', x[i])
         if true_temperature != generate_temperature:
             print(i, true_temperature, generate_temperature)
+            print(weather, file=gg)
+            continue
     # if -i in weather_dict.keys():
         # x[i] += weather_dict[-i]
 
@@ -368,4 +411,25 @@ for i in range(len(x)):
     entity_dict = entity_dicts[i]
     for key, value in zip(entity_dict.keys(), entity_dict.values()):
         x[i] = x[i].replace(value, key)
+
+    if i in recommend_round.keys() and recommend_round[i] not in comment_recommends.keys():
+        print(recommend_round[i])
+
+    # compare the generated response with those in dataset, and select the most likely one
+    if i in recommend_round.keys() and recommend_round[i] in comment_recommends.keys():
+        origins = comment_recommends[recommend_round[i]]
+        max_bleu = -1.0
+        most_similar_response = ''
+        # print(x[i])
+        for o in origins:
+            bleu = sacrebleu.corpus_bleu([x[i]], [[o]]).score
+            # print(bleu, o)
+            if bleu > max_bleu:
+                max_bleu = bleu
+                most_similar_response = o
+        # print(x[i], most_similar_response)
+        x[i] = most_similar_response
+
+
+
     print(x[i], file=gg)
