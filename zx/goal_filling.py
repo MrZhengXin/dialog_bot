@@ -117,7 +117,7 @@ def fill_goal(i):
 
 def extract_info_from_goal(goal):
     no = int(goal[1])
-    if '再见' in goal:
+    if '] 再见' in goal:
         return [no, '再见']
     action = re.findall('][^(]*\(', goal)[0][2:-2]
     sth = re.findall('『[^』]*』', goal)
