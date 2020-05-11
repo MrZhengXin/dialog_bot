@@ -16,9 +16,9 @@ parser.add_argument('--force_history', type=bool, default=False, help='normally 
 would needed')
 parser.add_argument('--max_history_length', type=int, default=128)
 parser.add_argument('--max_goal_stage_in_history', type=int, default=1)
-parser.add_argument('--train_json', type=str, default='train.json')
-parser.add_argument('--train_source_file', type=str, default='train_with_knowledge.src')
-parser.add_argument('--train_target_file', type=str, default='train_with_knowledge.tgt')
+parser.add_argument('--train_json', type=str, default='dev.json')
+parser.add_argument('--train_source_file', type=str, default='valid_with_knowledge.src')
+parser.add_argument('--train_target_file', type=str, default='valid_with_knowledge.tgt')
 
 args = parser.parse_args()
 
@@ -109,6 +109,10 @@ def cal_score(triple, q, a):
 with open(args.train_json, 'r') as f:
     x = f.readlines()
 
+with open('valid_hypo (1).txt', 'r') as f:
+    valid = f.readlines()
+valid_entity = open('valid_hypo_entity.txt', 'w')
+
 src = open(args.train_source_file, 'w')
 tgt = open(args.train_target_file, 'w')
 len_src = 0
@@ -121,6 +125,7 @@ select_comments_dict = dict()
 comments_score = dict()
 problembatic_entity = dict()
 line_no = 0
+comment_recommends = dict()
 for i in x:
     line_no += 1
     i = json.loads(i)
@@ -241,6 +246,13 @@ for i in x:
             # conversation[j] = conversation[j][4:]
         using_k = set()  # bot need these knowledge tuples to answer
         user_round = user_first ^ (j & 1)  # True if it were user speaking
+
+        # if not user_round:
+            # for k, v in zip(entity_dict.keys(), entity_dict.values()):
+                # valid[0] = valid[0].replace(v, k)
+            # print(valid[0].strip(), file=valid_entity)
+            # valid = valid[1:]
+
         qa = conversation[j].strip() + ' ' + conversation[j + 1].strip()
         history = ' '.join(conversation[:j])
 
@@ -333,6 +345,12 @@ for i in x:
                                     select_comments_dict[song] = str(uk).replace(entity_dict[song], song)
                                     comments_score[song] = bleu
                                 best_comment = str(uk)
+                                if song != '':
+                                    comment_recommend = conversation[j+1].replace(entity_dict[song], song)
+                                    if song not in comment_recommends.keys():
+                                        comment_recommends[song] = {comment_recommend}
+                                    else:
+                                        comment_recommends[song].add(comment_recommend)
                     # if best_comment == '':
                     # print(max_bleu, best_comment, qa)
                     using_k = {best_comment}
@@ -362,10 +380,29 @@ for i in x:
     if len_tgt == len_src - 1:
         print(conversation[-1], file=tgt)  # when bot say goodbye first, user's goodbye would be ignored.
         len_tgt += 1
+
+        for k, v in zip(entity_dict.keys(), entity_dict.values()):
+            valid[0] = valid[0].replace(v, k)
+        print(valid[0], file=valid_entity)
+        valid = valid[1:]
+
     assert len_src == len_tgt
 
 print(problembatic_entity)
 '''
+with open('dialog_comment_recommends.txt', 'r') as f:
+    comment_recommends_train = f.readline()
+    comment_recommends_train = eval(comment_recommends_train)
+
+for k, v in zip(comment_recommends_train.keys(), comment_recommends_train.values()):
+    if k not in comment_recommends.keys():
+        comment_recommends[k] = v
+    else:
+        for vi in v:
+            comment_recommends[k].add(vi)
+with open('dialog_comment_recommends_merge.txt', 'w') as f:
+    print(comment_recommends, file=f)
+
 with open('dialog_news_response.txt', 'w') as f:
     print(news_response, file=f)
 
