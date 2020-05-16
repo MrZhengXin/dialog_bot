@@ -206,6 +206,14 @@ def fill_goal(i):
                 if len(movies) == 0 or actor == '' or actor == None or len(songs) == 0:
                     fail(goal, kg)
                     fail_flag = True
+
+            elif news != '' and news_of != '':
+                goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '音乐 推荐', songs]]
+
+                if len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+                    
             else:  # (17):1 寒暄  2 提问  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
                 goal_fill = [[2, '提问'], [3, '关于 明星 的 聊天', singer], [4, '音乐 推荐', songs]]
 
