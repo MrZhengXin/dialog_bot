@@ -3,10 +3,8 @@ import datetime
 import re
 import random
 
-actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤', '林心如', '杨幂', '周迅', '成龙', '刘若英', '舒淇', '张学友', '张柏芝', '刘德华', '郭富城', '周杰伦', '张国荣', '林志颖', '何炅', '谢霆锋'}
 
-f = open('test_2_goal_fill.txt', 'w')
-debug = open('test_2_goal_fill_debug.txt', 'w')
+actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤', '林心如', '杨幂', '周迅', '成龙', '刘若英', '舒淇', '张学友', '张柏芝', '刘德华', '郭富城', '周杰伦', '张国荣', '林志颖', '何炅', '谢霆锋'}
 
 fail_cnt = 0
 def fail(goal, kg):
@@ -33,7 +31,10 @@ def fill_goal(i):
 
     # find entities
     kg = i['knowledge']
-    conversation = i['history']
+    if 'history' in i.keys():
+        conversation = i['history']
+    else:
+        conversation = i['conversation']
     songs = list()
     movies = list()
     restaurant = list()
@@ -65,7 +66,7 @@ def fill_goal(i):
     if goal[2].startswith('[4] 再见'):
         goal_fill = [[2, '']]
         if goal[1].startswith('[3] 新闻 推荐'):  # (4):1 寒暄  2 提问  3 新闻 推荐
-            goal_fill = [[2, '提问']]
+            goal_fill = [[2, '提问', '最 喜欢 的 新闻']]
         elif goal[1].startswith('[3] 兴趣点 推荐'):  # (6):1 问 天气  2 美食 推荐  3 兴趣点 推荐
             goal_fill = [[2, '美食 推荐']]
         elif goal[1].startswith('[3] 电影 推荐'):  # (12):1 问答  2 关于 明星 的 聊天  3 电影 推荐  or (13):1 问 日期  2 关于 明星 的 聊天  3 电影 推荐
@@ -171,7 +172,7 @@ def fill_goal(i):
             goal_fill = [[2, '问 User 姓名'],  [3, '问 User 性别'],  [4, '问 User 年龄']]
         elif goal[1].startswith('[5] 电影 推荐'):
             if news_of == '':  # (8):1 寒暄  2 提问  3 提问  4 关于 明星 的 聊天  5 电影 推荐
-                goal_fill = [[2, '提问'], [3, '提问'], [4, '关于 明星 的 聊天', actor]]
+                goal_fill = [[2, '提问', '最 喜欢 的 电影'], [3, '提问', '最 喜欢 的 主演'], [4, '关于 明星 的 聊天', actor]]
 
                 if actor == '' or actor == None:
                     fail(goal, kg)
@@ -202,17 +203,16 @@ def fill_goal(i):
 
                 if len(movies) == 0 or actor == '' or actor == None or len(songs) == 0:
                     fail(goal, kg)
-                    fail_flag = True
+                    fail_flag = True                
+                elif news != '' and news_of != '':
+                    goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '音乐 推荐', songs]]
 
-            elif news != '' and news_of != '':
-                goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '音乐 推荐', songs]]
+                    if len(songs) == 0:
+                        fail(goal, kg)
+                        fail_flag = True
 
-                if len(songs) == 0:
-                    fail(goal, kg)
-                    fail_flag = True
-                    
             else:  # (17):1 寒暄  2 提问  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
-                goal_fill = [[2, '提问'], [3, '关于 明星 的 聊天', singer], [4, '音乐 推荐', songs]]
+                goal_fill = [[2, '提问', '最 喜欢 的 歌曲'], [3, '关于 明星 的 聊天', singer], [4, '音乐 推荐', songs]]
 
                 if singer == '' or singer == None or len(songs) == 0:
                     fail(goal, kg)
@@ -220,7 +220,7 @@ def fill_goal(i):
         return goal_fill
 
     elif goal[2].startswith("[7] 再见"):
-        goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies], [5, '音乐 推荐', songs]]
+        goal_fill = [[2, '新闻 推荐', news_of, news], [3, '电影 推荐', movies], [4, '音乐 推荐', songs], [5, '关于 明星 的 聊天', actor]]
         return goal_fill
     else:
         fail(goal, kg)
@@ -235,18 +235,31 @@ def extract_info_from_goal(goal):
     action = re.findall(']\s*([^(]*?)\s*\(', goal)[0]
     sth = re.findall('『[^』]*』', goal)
     sth = [s[2:-2] for s in sth]
+    if action == '提问':
+        if '最 喜欢 谁 的 新闻' in goal:
+            aspect = '最 喜欢 的 新闻'
+        elif '最 喜欢 的 歌曲' in goal:
+            aspect = '最 喜欢 的 歌曲'
+        elif '的 哪个 主演' in goal and '最 喜欢' in goal:
+            aspect = '最 喜欢 的 主演'
+        elif '最 喜欢 的 电影' in goal:
+            aspect = '最 喜欢 的 电影'
+        else:
+            print(goal)
+        return [no, action, aspect]
     if action == '兴趣点 推荐':
         return [no, action, sth[0]]
     if action in ['新闻 点播', '新闻 推荐']:
-        if len(sth) < 2:
-            print(data_cnt)
+        # if len(sth) < 2:
+            # print(data_cnt)
+        # print(goal)
         return [no, action, sth[0], sth[1]]
-    if action in ['电影 推荐', '音乐 推荐', '音乐 点播']:
+    if action in ['电影 推荐', '音乐 推荐']:
         movies = [sth[0]]
         if '；' in goal:
             movies.append(sth[3])
         return [no, action, movies]
-    if action == '播放 音乐':
+    if action in ['播放 音乐', '音乐 点播']:
         return [no, action, sth[0]]
     if action == '关于 明星 的 聊天':
         return [no, action, sth[0]]
@@ -265,8 +278,14 @@ def fill_test(i):
         return goals_info_complete
 
 
-data_cnt = 0
+
 if __name__ == '__main__':
+    data_cnt = 0
+    with open('test_2.txt', 'r') as f:
+        x = f.readlines()
+
+    f = open('./goal_fill/test_2_goal_fill.txt', 'w')
+    debug = open('./goal_fill/test_2_goal_fill_debug.txt', 'w')
     for line in x:
         data_cnt += 1
         data = json.loads(line)
