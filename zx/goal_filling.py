@@ -220,7 +220,7 @@ def fill_goal(i):
         return goal_fill
 
     elif goal[2].startswith("[7] 再见"):
-        goal_fill = [[2, '新闻 推荐', news_of, news], [3, '电影 推荐', movies], [4, '音乐 推荐', songs], [5, '关于 明星 的 聊天', actor]]
+        goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies], [5, '音乐 推荐', songs]]
         return goal_fill
     else:
         fail(goal, kg)
