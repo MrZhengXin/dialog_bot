@@ -3,10 +3,7 @@ import datetime
 import re
 import random
 
-with open('test_2.txt', 'r', encoding='utf-8') as f:
-    x = f.readlines()
-with open('all_star.txt', 'r', encoding='utf-8') as f:
-    actors = eval(f.read())
+actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤', '林心如', '杨幂', '周迅', '成龙', '刘若英', '舒淇', '张学友', '张柏芝', '刘德华', '郭富城', '周杰伦', '张国荣', '林志颖', '何炅', '谢霆锋'}
 
 f = open('test_2_goal_fill.txt', 'w')
 debug = open('test_2_goal_fill_debug.txt', 'w')
@@ -244,7 +241,7 @@ def extract_info_from_goal(goal):
         if len(sth) < 2:
             print(data_cnt)
         return [no, action, sth[0], sth[1]]
-    if action in ['电影 推荐', '音乐 推荐']:
+    if action in ['电影 推荐', '音乐 推荐', '音乐 点播']:
         movies = [sth[0]]
         if '；' in goal:
             movies.append(sth[3])
