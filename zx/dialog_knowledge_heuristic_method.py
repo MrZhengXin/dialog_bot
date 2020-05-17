@@ -446,6 +446,7 @@ with open('dialog_celebrity_chat_merge.txt', 'w') as f:
 
 with open('dialog_news_response.txt', 'w') as f:
     print(news_response, file=f)
-'''
+
 with open('dialog_select_comment_dict.txt', 'w') as f:
     print(select_comments_dict, file=f)
+'''
