@@ -8,17 +8,18 @@ import goal_filling
 import sacrebleu
 
 parser = argparse.ArgumentParser(description='input delimiter. [ks]xxx[ks]xxx[ke]xxx[gs]xxx[gs]')
-parser.add_argument('--knowledge_sep', type=str, default='\t')
-parser.add_argument('--knowledge_end', type=str, default='\t')
-parser.add_argument('--goal_stage_sep', type=str, default='\t')
+parser.add_argument('--knowledge_sep', type=str, default=' ')
+parser.add_argument('--knowledge_end', type=str, default='φ')
+parser.add_argument('--conversation_sep', type=str, default='φ')
+parser.add_argument('--goal_stage_sep', type=str, default=' ')
 parser.add_argument('--bot_in_history', type=bool, default=True, help='whether bot response appear in history')
 parser.add_argument('--force_history', type=bool, default=False, help='normally if knowledges were found, no history \
 would needed')
 parser.add_argument('--max_history_length', type=int, default=128)
-parser.add_argument('--max_goal_stage_in_history', type=int, default=1)
+parser.add_argument('--max_goal_stage_in_history', type=int, default=2)
 parser.add_argument('--train_json', type=str, default='dev.json')
 parser.add_argument('--train_source_file', type=str, default='valid_with_knowledge.src')
-parser.add_argument('--train_target_file', type=str, default='valid_with_knowledge.tgt')
+parser.add_argument('--train_target_file', type=str, default='valid_with_knowledge.zh_CN')
 
 args = parser.parse_args()
 
@@ -119,17 +120,22 @@ len_src = 0
 len_tgt = 0
 
 difficult_info_mask = {'身高': 'height', '体重': 'weight', '评分': 'rating', '地址': 'address',
-                       '人均价格': 'expense'}
+                       '人均价格': 'expense', '导演': 'director', '姓名': 'name'}
 news_response = dict()
+news_chat = dict()
 select_comments_dict = dict()
 comments_score = dict()
 problembatic_entity = dict()
 line_no = 0
 comment_recommends = dict()
+celebrity_chat = dict()
 for i in x:
     line_no += 1
     i = json.loads(i)
     conversation = i['conversation']
+    # conversation = [c + ' 。' if c[-1] not in ['！', '？', '。'] else c for c in conversation]
+    conversation = [c.replace(i['user_profile']['姓名'], 'name') for c in conversation]  # replace user's name
+
     goal = i['goal'].split(' --> ')
     kg = i['knowledge']
 
@@ -145,12 +151,14 @@ for i in x:
 
     entity_cnt = 0
     entity_dict = dict()
-    goal_info = [goal_filling.extract_info_from_goal(g) for g in goal]
+    goal_info = [goal_filling.extract_info_from_goal(g) for g in goal] if '--> ...... -->' not in goal else goal_filling.fill_test(i)
+    # print(goal_info)
+    # input()
     for gi in goal_info:
         if len(gi) == 4:  # news
             kg.append([gi[2], '新闻', gi[3]])
             continue
-        if len(gi) != 3 or gi[1] not in ['兴趣点 推荐', '电影 推荐', '播放 音乐', '音乐 推荐']:
+        if len(gi) != 3 or gi[1] not in ['兴趣点 推荐', '电影 推荐', '播放 音乐', '音乐 推荐', '音乐 点播']:
             continue
         entities = gi[2] if type(gi[2]) is type(list()) else [gi[2]]
         entity_cnt += len(entities)
@@ -165,7 +173,7 @@ for i in x:
             if '电影 推荐' == gi[1]:
                 entity_cnt -= 1
                 entity_no = 'movie_' + str(entity_cnt)
-            if '播放 音乐' == gi[1] or '音乐 推荐' == gi[1]:
+            if '播放 音乐' == gi[1] or '音乐 推荐' == gi[1] or '音乐 点播' == gi[1]:
                 entity_cnt -= 1
                 entity_no = 'song_' + str(entity_cnt)
             if entity_no == '':
@@ -201,7 +209,7 @@ for i in x:
         bot_hello = True
         hello_info = ['寒暄', i['situation']]
         if '带 User 名字' in goal[0]:
-            hello_info.append(i['user_profile']['姓名'])
+            hello_info.append('name')
             hello_info.append(i['user_profile']['性别'])
             if '年龄区间' in str(i['user_profile']):
                 hello_info.append(i['user_profile']['年龄区间'])
@@ -274,37 +282,43 @@ for i in x:
             if str(k[:3]) in used_k:  # assume that no knowledge will be used twice
                 continue
 
-            if ('天气' in conversation[j] and validate(k[1])) or \
+            if k[1] == '导演' and '   ' in k[2]:  # ["喜剧之王", "导演", "周星驰   李 力持"]
+                k[2] = k[2].replace('   ', ' ， ')
+
+            if (k[1] == '天气' and ((goal_info[1][1] == '天气 信息 推送' and j == 2) or  # from these goals we can know what knowledge to use
+                                        (goal_info[0][1] == '问 天气' and j == 0))) or \
                     ('适合' in k[1] and j == 2) or \
                     ('生日' == k[1] and goal_info[0][1] == '问 日期' and j == 2):
+                #print(k[:3])
                 using_k.add(str(k[:3]))
                 continue
             score = cal_score(k, history + ' ' + conversation[j].strip(), conversation[j+1].strip())
 
 
             if score > max(2, cal_score(k, history, conversation[j].strip())):  # this knowledge might appear and not appear before
+                
                 if k[1] == '新闻':  # collect how bot broadcast news
                     news_response[k[2]] = conversation[j+1]
                     # print(k[2], conversation[j+1])
-                used_k.add(str(k[:3]))
+
                 if k[1] in difficult_info_mask.keys() and k[2] in conversation[j+1]:
+
                     conversation[j+1] = re.sub('(^'+k[2]+')|( '+k[2] + ' )|( ' + k[2] + '$)', ' ' + difficult_info_mask[k[1]] + ' ', conversation[j+1])
                     # print(conversation[j+1])
                     # conversation[j+1].replace(' ' + k[2] + ' ', ' ' + difficult_info_mask[k[1]] + ' ')
                     # print(conversation[j+1])
                     k[2] = difficult_info_mask[k[1]]
-                if k[1] == '评论':
+                
+                if k[1] == '评论':  # comment only used in recommendation
                     k[2] = k[2][:88]
+                    if '推荐' not in goal_info[current_goal_stage-1][1] and (len(goal_info) == current_goal_stage or '推荐' not in goal_info[current_goal_stage][1]):
+                        continue
+
+                used_k.add(str(k[:3]))
                 if user_round:  # we only need simulate bot
                     using_k.add(str(k[:3]))  # using sest to remove redundant tuple such as multiple celebrity birthday
                 if '新闻' in k[1]:  # avoid multiple news knowledge
                     break
-                # if score > 3:
-                    # the knowledge is fully explored
-                    #  consider the celebrity birthday cases.
-                    #  First, the date today is asked and answered. However,
-                    #  the celebrity birthday tuple would also be partially matched.
-                    #  So the tuple cannot be treated as used knowledge.
 
         if j == 0 and ('问 日期' in goal[0] or '问 时间' in goal[0]):  # situation not in knowledge
             using_k = {i['situation']}
@@ -323,8 +337,12 @@ for i in x:
             goal_transition = str(goal_transition)
             for k, v in zip(entity_dict.keys(), entity_dict.values()):
                 goal_transition = goal_transition.replace(k, v)
-            print(goal_transition, end=args.knowledge_sep, file=src)
+            print(goal_transition, end=args.knowledge_end, file=src)
             if len(using_k) != 0:
+
+                if goal_info[current_goal_stage-1][1] == '关于 明星 的 聊天' and conversation[j+1][0] != '[':  # collect knowledge and corresponding response when chatting about celebrity
+                    celebrity_chat[str(using_k)] = conversation[j+1]
+                
                 # use only comment knowledge when recommending
                 if recommend_item != '':
                     best_comment = ''
@@ -341,16 +359,20 @@ for i in x:
                                     if uk[0] == entity_dict[entity]:
                                         song = entity
                                 max_bleu = bleu
-                                if song != '' and (song not in select_comments_dict or bleu > comments_score[song]):
-                                    select_comments_dict[song] = str(uk).replace(entity_dict[song], song)
-                                    comments_score[song] = bleu
-                                best_comment = str(uk)
                                 if song != '':
-                                    comment_recommend = conversation[j+1].replace(entity_dict[song], song)
-                                    if song not in comment_recommends.keys():
-                                        comment_recommends[song] = {comment_recommend}
+                                    if song not in select_comments_dict:
+                                        select_comments_dict[song] = {str(uk).replace(entity_dict[song], song)}
                                     else:
-                                        comment_recommends[song].add(comment_recommend)
+                                        select_comments_dict[song].add(str(uk).replace(entity_dict[song], song))
+                                best_comment = str(uk)
+                                
+                                if song != '':
+                                    uk = str(uk).replace(entity_dict[song], song)
+                                    comment_recommend = conversation[j+1].replace(entity_dict[song], song)
+                                    if uk not in comment_recommends.keys():
+                                        comment_recommends[uk] = {comment_recommend}
+                                    else:
+                                        comment_recommends[uk].add(comment_recommend)
                     # if best_comment == '':
                     # print(max_bleu, best_comment, qa)
                     using_k = {best_comment}
@@ -364,14 +386,14 @@ for i in x:
                 delta_goal_stage = 0
                 while len(' '.join(add_history) + conversation[pos_h]) < args.max_history_length and pos_h >= 0:
                     add_history.append(conversation[pos_h].strip())
-                    pos_h -= 1
                     if pos_h in goal_stage_milestone:
                         add_history[-1] += args.goal_stage_sep
                         delta_goal_stage += 1
                         if delta_goal_stage >= args.max_goal_stage_in_history:
                             break
-
-                print(*add_history[::-1], sep='\t', end='\t', file=src)
+                    pos_h -= 1
+                # add_history = [c + ' 。' if c[-1] not in ['！', '？', '。'] else c for c in add_history]
+                print(*add_history[::-1], sep=args.conversation_sep, end=args.conversation_sep, file=src)
         print(conversation[j] + args.goal_stage_sep, file=src if user_round else tgt)
         if user_round:
             len_src += 1
@@ -389,8 +411,14 @@ for i in x:
     assert len_src == len_tgt
 
 print(problembatic_entity)
+
+with open('dialog_celebrity_chat_train.txt', 'w') as f:
+    print(celebrity_chat, file=f)
+with open('dialog_comment_recommends_train.txt', 'w') as f:
+    print(comment_recommends, file=f)
+
 '''
-with open('dialog_comment_recommends.txt', 'r') as f:
+with open('dialog_comment_recommends_merge.txt', 'r') as f:
     comment_recommends_train = f.readline()
     comment_recommends_train = eval(comment_recommends_train)
 
@@ -403,8 +431,21 @@ for k, v in zip(comment_recommends_train.keys(), comment_recommends_train.values
 with open('dialog_comment_recommends_merge.txt', 'w') as f:
     print(comment_recommends, file=f)
 
+
+with open('dialog_celebrity_chat_merge.txt', 'r') as f:
+    celebrity_chat_train = f.readline()
+    celebrity_chat_train = eval(celebrity_chat_train)
+
+for k, v in zip(celebrity_chat_train.keys(), celebrity_chat_train.values()):
+    if k not in celebrity_chat.keys():
+        celebrity_chat[k] = v
+with open('dialog_celebrity_chat_merge.txt', 'w') as f:
+    print(celebrity_chat, file=f)
+
+
+
 with open('dialog_news_response.txt', 'w') as f:
     print(news_response, file=f)
-
+'''
 with open('dialog_select_comment_dict.txt', 'w') as f:
-    print(select_comments_dict, file=f)'''
+    print(select_comments_dict, file=f)
