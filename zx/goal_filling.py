@@ -31,6 +31,8 @@ def fill_goal(i):
 
     # find entities
     kg = i['knowledge']
+    accept_movies = i['user_profile']['接受 的 电影'] if '接受 的 电影' in i['user_profile'].keys() else {}
+    accept_songs = i['user_profile']['接受 的 音乐']if '接受 的 音乐' in i['user_profile'].keys() else {}
     if 'history' in i.keys():
         conversation = i['history']
     else:
@@ -53,14 +55,21 @@ def fill_goal(i):
             singer = entity
         if relation == '生日':
             birthday_person = entity
-        # However, there is a strange movie "20   30   40"
-        # if relation == '主演' and info.find('   ') == -1 and info not in goal[0] and info not in goal[1]:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
-        if relation == '主演' and entity in actors:
+        if relation == '主演' and entity in actors and info not in goal[0] and info not in goal[1]:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
             if info not in movies:
                 movies.append(info)
             actor = entity
         if relation == '地址':
             restaurant.append(entity)
+
+    # if size of items is more than two, delete accepted item
+    if len(movies) > 3:
+        movies = [m for m in movies if m not in accept_movies]
+    if len(songs) > 3:
+        songs = [s for s in songs if s not in accept_songs]
+    if len(movies) > 3 or len(songs) > 3:
+        print(movies, songs)
+        input()
 
     # goal sequence length is four
     if goal[2].startswith('[4] 再见'):
