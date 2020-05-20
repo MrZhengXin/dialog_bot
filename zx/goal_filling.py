@@ -5,7 +5,7 @@ import random
 
 
 actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤', '林心如', '杨幂', '周迅', '成龙', '刘若英', '舒淇', '张学友', '张柏芝', '刘德华', '郭富城', '周杰伦', '张国荣', '林志颖', '何炅', '谢霆锋'}
-dataset_bug_movies = {'金鸡2', '亚飞与亚基', '倩女幽魂Ⅲ：道道道', '城市猎人', '地球四季', '中国合伙人', '笑傲江湖', '救火英雄', '旺角黑夜', '男人四十', '无问西东', '太平轮·彼岸', '男儿本色', '新警察故事', '十二夜', '逆战', '太平轮（上）', '消失的子弹', '李米的猜想', '证人', '亚飞与亚基', '叶问2：宗师传奇', '忘不了', '苏州河', '钟无艳', '暴疯语', '鸳鸯蝴蝶', '金鸡2', '白兰', '线人', '情迷大话王', '异灵灵异-2002'}
+dataset_bug_movies = {'新边缘人', '一起飞', '阿飞正传', '金鸡2', '亚飞与亚基', '倩女幽魂Ⅲ：道道道', '城市猎人', '地球四季', '中国合伙人', '笑傲江湖', '救火英雄', '旺角黑夜', '男人四十', '无问西东', '太平轮·彼岸', '男儿本色', '新警察故事', '十二夜', '逆战', '太平轮（上）', '消失的子弹', '李米的猜想', '证人', '亚飞与亚基', '叶问2：宗师传奇', '忘不了', '苏州河', '钟无艳', '暴疯语', '鸳鸯蝴蝶', '金鸡2', '白兰', '线人', '情迷大话王', '异灵灵异-2002'}
 fail_cnt = 0
 def fail(goal, kg):
     global fail_cnt
@@ -19,10 +19,10 @@ def fail(goal, kg):
     for i in kg:
         if i[1] == '评论' and i[0] not in actors:
             bug_movie.add(i[0])
+    for i in kg:
         if '主演' == i[1] and i[2] in bug_movie:
             bug_movie.remove(i[2])
     print(bug_movie)
-    input()
 
 
 def fill_goal(i):
@@ -53,6 +53,7 @@ def fill_goal(i):
     news_of = ''
     news = ''
     actor = ''
+    food = ''
     for j in kg:
         entity, relation, info = j
         if relation == '新闻':
@@ -63,10 +64,12 @@ def fill_goal(i):
             singer = entity
         if relation == '生日':
             birthday_person = entity
-        if relation == '主演' and info not in accept_movies and entity in actors and info not in goal[0] and info not in goal[1]:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
-            if info not in movies:
+        if relation == '主演' and entity in actors:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
+            if info not in movies and info not in accept_movies and info not in goal[0] and info not in goal[1]:
                 movies.append(info)
             actor = entity
+        if relation in ['适合吃', '特色菜']:
+            food = info
         if relation == '地址':
             restaurant.append(entity)
         if relation == '评论' and entity.replace(' ', '') in dataset_bug_movies and entity not in movies and entity not in songs and entity not in actors and entity not in goal[0] and entity not in goal[1]:  # dataset bug: no acting knowledge
@@ -86,7 +89,7 @@ def fill_goal(i):
         if goal[1].startswith('[3] 新闻 推荐'):  # (4):1 寒暄  2 提问  3 新闻 推荐
             goal_fill = [[2, '提问', '最 喜欢 的 新闻']]
         elif goal[1].startswith('[3] 兴趣点 推荐'):  # (6):1 问 天气  2 美食 推荐  3 兴趣点 推荐
-            goal_fill = [[2, '美食 推荐']]
+            goal_fill = [[2, '美食 推荐', food]]
         elif goal[1].startswith('[3] 电影 推荐'):  # (12):1 问答  2 关于 明星 的 聊天  3 电影 推荐  or (13):1 问 日期  2 关于 明星 的 聊天  3 电影 推荐
             if goal[0].startswith('[1] 问答'):
                 celebrity = re.findall('『[^』]*』', goal[0])[1][2:-2]
@@ -154,6 +157,7 @@ def fill_goal(i):
 
                 elif news != '' and news_of != '':  # (25):1 寒暄  2 新闻 推荐  3 关于 明星 的 聊天  4 电影 推荐
                     goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', actor]]
+                    # print(goal_fill)
 
                     if actor == '' or actor == None:
                         fail(goal, kg)
@@ -255,6 +259,8 @@ def extract_info_from_goal(goal):
     action = re.findall(']\s*([^(]*?)\s*\(', goal)[0]
     sth = re.findall('『[^』]*』', goal)
     sth = [s[2:-2] for s in sth]
+    if action == '问答':
+        return [no, action, sth[0], sth[1]]
     if action == '提问':
         if '最 喜欢 谁 的 新闻' in goal:
             aspect = '最 喜欢 的 新闻'
@@ -282,6 +288,11 @@ def extract_info_from_goal(goal):
     if action in ['播放 音乐', '音乐 点播']:
         return [no, action, sth[0]]
     if action == '关于 明星 的 聊天':
+        if sth[0] in actors:
+            return [no, action, sth[0]]
+        else:
+            return [no, action, sth[1]]  # [3] 关于 明星 的 聊天 ( Bot 主动 ， Bot 主动 从   『 嫁个100分男人 』   聊到 他 的 主演   『 谢娜 』
+    if action == '美食 推荐':
         return [no, action, sth[0]]
     return [no, action]
 
