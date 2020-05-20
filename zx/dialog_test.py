@@ -14,14 +14,15 @@ parser.add_argument('--knowledge_end', type=str, default='φ')
 parser.add_argument('--conversation_sep', type=str, default='φ')
 parser.add_argument('--goal_stage_sep', type=str, default=' ')
 parser.add_argument('--bot_in_history', type=bool, default=True, help='whether bot response appear in history')
-parser.add_argument('--force_history', type=bool, default=False, help='normally if knowledges were found, no history \
+parser.add_argument('--force_history', type=bool, default=True, help='normally if knowledges were found, no history \
 would needed')
 parser.add_argument('--max_history_length', type=int, default=96)
 parser.add_argument('--max_goal_stage_in_history', type=int, default=2)
 parser.add_argument('--test_json', type=str, default='test_1.json')
 parser.add_argument('--test_source_file', type=str, default='test_1_with_knowledge.src')
-parser.add_argument('--test_generate_file', type=str, default='test_hypo_1.txt')
-parser.add_argument('--test_target_file', type=str, default='mbart_test_1_0520.txt')
+parser.add_argument('--test_generate_file', type=str, default='test_hypo_1(1).txt')
+parser.add_argument('--test_target_file', type=str, default='mbart_test_1_0520_aistudio.txt')
+parser.add_argument('--source_only', type=bool, default=False)
 
 args = parser.parse_args()
 
@@ -30,7 +31,7 @@ actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤'
 
 difficult_info_mask = {'身高': 'height', '体重': 'weight', '评分': 'rating', '地址': 'address', '特色菜': 'special',
                        '人均价格': 'expense', '导演': 'director', '姓名': 'name', '星座': 'constellation',
-                       '血型': 'bloodtype', '出生地': 'birthplace', '生日': 'birthday', '国家地区': 'region'}
+                       '血型': 'bloodtype', '出生地': 'birthplace', '生日': 'birthday', '国家地区': 'region', '属相': 'zodiac'}
 
 
 with open('dialog_comment_recommends_merge.txt', 'r') as f:
@@ -165,7 +166,7 @@ def decode_json(i):
             used_comment, new_comment = '', ''
             info_lists = [entity_no]
             for j in range(len(kg)):
-                if kg[j][0].replace(' ', '') == entity.replace(' ', ''):
+                if kg[j][0].replace(' ', '').replace('·', '') == entity.replace(' ', '').replace('·', ''):
                     if kg[j][0].replace(' ', '') + ':' == kg[j][2].replace(' ', ''):  # avoid comments like
                         # ["亚飞与亚基", "评论", "亚飞与亚基 :"]"
                         continue
@@ -256,6 +257,10 @@ if __name__ == '__main__':
                         goal_transition[pos] += [eval(uk)[1:] for uk in ks]
                         break
 
+            if '新闻' in goal_transition[0][1]:
+                goal_transition[0][3] = goal_transition[0][3].replace(' ', '')[:128]
+            if len(goal_transition) > 1 and '新闻' in goal_transition[1][1]:
+                goal_transition[1][3] = goal_transition[1][3].replace(' ', '')[:128]
             print(*goal_transition, end=args.knowledge_end, sep=args.knowledge_sep, file=src)
             j = len(conversation)
             if 0 < j and args.force_history:  # add history
@@ -263,7 +268,7 @@ if __name__ == '__main__':
                 pos_h = j - 1
                 delta_goal_stage = 0
                 while len(' '.join(add_history) + conversation[pos_h]) < args.max_history_length and pos_h >= 0:
-                    add_history.append(conversation[pos_h].strip())
+                    add_history.append(conversation[pos_h].strip()[:36])
                     if conversation[pos_h][0] == '[':
                         add_history[-1] += args.goal_stage_sep
                         delta_goal_stage += 1
@@ -272,16 +277,12 @@ if __name__ == '__main__':
                     pos_h -= 1
                 # add_history = [c + ' 。' if c[-1] not in ['！', '？', '。'] else c for c in add_history]
                 print(*add_history[::-1], sep=args.conversation_sep, end=args.conversation_sep, file=src)
-            print(conversation[-1] + args.goal_stage_sep, file=src)
+            print(file=src)
 
+        if args.source_only:
+            continue
         response = gen[num]
 
-
-        # tmp
-        if '地址' in response or '评分' in response or '人均' in response:
-            print(response, prv[num])
-            print(prv[num].strip(), file=tgt)
-            continue
 
         # fix goal mark problem
         if response[0] == '[' and response[1] != '1':
@@ -292,9 +293,9 @@ if __name__ == '__main__':
         for k in kg:
             if k[1] in difficult_info_mask.keys():
                 key, value = "'" + difficult_info_mask[k[1]], k[2]
-                if k[0] not in actors:
+                if k[0] not in actors and 'restaurant' not in k[0]:
                     key = k[0] + key
-                if '生日' == k[1] and ('生日' in response or '出生' in response):
+                if False and '生日' == k[1] and ('生日' in response or '出生' in response):
                     if '年' in response:
                         response = re.sub('[0-9 ]*年[0-9 ]月[0-9 ]*', k[2], response)
                     else:
@@ -320,5 +321,12 @@ if __name__ == '__main__':
         for entity, entity_no in zip(entity_dict.keys(), entity_dict.values()):
             response = response.replace(entity_no, entity)
 
+        if 'movie_1' in response:
+            for k in kg:
+                if k[1] == '主演' and k[0] in actors:
+                    response.replace('movie_1', k[2])
+                    print(k[2])
+                    break
 
+        response = response.replace("身高 'height ", '').replace(' 《 movie_1 》', '')
         print(response.strip(), file=tgt)
