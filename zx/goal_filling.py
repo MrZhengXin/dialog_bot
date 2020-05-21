@@ -557,11 +557,11 @@ def fill_test(i):
 
 if __name__ == '__main__':
     data_cnt = 0
-    with open('test_2.txt', 'r') as f:
+    with open('test_2.txt', 'r', encoding='utf-8') as f:
         x = f.readlines()
 
-    f = open('./goal_fill/test_2_goal_fill.txt', 'w')
-    debug = open('./goal_fill/test_2_goal_fill_debug.txt', 'w')
+    f = open('./goal_fill/test_2_goal_fill.txt', 'w', encoding='utf-8')
+    debug = open('./goal_fill/test_2_goal_fill_debug.txt', 'w', encoding='utf-8')
     for line in x:
         data_cnt += 1
         data = json.loads(line)
