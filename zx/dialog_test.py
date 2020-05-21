@@ -18,11 +18,11 @@ parser.add_argument('--force_history', type=bool, default=True, help='normally i
 would needed')
 parser.add_argument('--max_history_length', type=int, default=96)
 parser.add_argument('--max_goal_stage_in_history', type=int, default=2)
-parser.add_argument('--test_json', type=str, default='test_1.json')
-parser.add_argument('--test_source_file', type=str, default='test_1_with_knowledge.src')
+parser.add_argument('--test_json', type=str, default='test_2.json')
+parser.add_argument('--test_source_file', type=str, default='test_2_with_knowledge.src')
 parser.add_argument('--test_generate_file', type=str, default='test_hypo_1(1).txt')
-parser.add_argument('--test_target_file', type=str, default='mbart_test_1_0520_aistudio.txt')
-parser.add_argument('--source_only', type=bool, default=False)
+parser.add_argument('--test_target_file', type=str, default='mbart_test_2_0521.txt')
+parser.add_argument('--source_only', type=bool, default=True)
 
 args = parser.parse_args()
 
