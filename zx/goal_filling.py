@@ -1,3 +1,4 @@
+#coding:utf-8
 import json
 import datetime
 import re
@@ -14,7 +15,7 @@ def fail(goal, kg):
         'goal': goal,
         'kg': kg
     }
-    print(json.dumps(info, ensure_ascii=False))#, file=debug)
+    print(json.dumps(info, ensure_ascii=False), file=debug)
     bug_movie = set()
     for i in kg:
         if i[1] == '评论' and i[0] not in actors:
@@ -41,19 +42,27 @@ def fill_goal(i):
     kg = i['knowledge']
     accept_movies = i['user_profile']['接受 的 电影'] if '接受 的 电影' in i['user_profile'].keys() else {}
     accept_songs = i['user_profile']['接受 的 音乐']if '接受 的 音乐' in i['user_profile'].keys() else {}
+    favorite_movies = i['user_profile']['喜欢 的 电影'] if '喜欢 的 电影' in i['user_profile'].keys() else {}
+    favorite_songs = i['user_profile']['喜欢 的 音乐'] if '喜欢 的 音乐' in i['user_profile'].keys() else {}
+
     if 'history' in i.keys():
         conversation = i['history']
     else:
         conversation = i['conversation']
     songs = list()
     movies = list()
+    movies0 = list()
     restaurant = list()
+    like = list()
     birthday_person = ''
     singer = ''
     news_of = ''
     news = ''
     actor = ''
+    actor0=''
     food = ''
+    weather = ''
+    address = i['user_profile']['居住地'] if "居住地" in i['user_profile'].keys() else ''
     for j in kg:
         entity, relation, info = j
         if relation == '新闻':
@@ -65,29 +74,60 @@ def fill_goal(i):
         if relation == '生日':
             birthday_person = entity
         if relation == '主演' and entity in actors:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
-            if info not in movies and info not in accept_movies and info not in goal[0] and info not in goal[1]:
-                movies.append(info)
-            actor = entity
+            if actor == '' or entity == actor:
+                if info not in movies and info not in accept_movies and info not in goal[0]:
+                    if '电影 推荐' not in goal[1]:# movie：亲爱的 song:亲爱的小孩
+                        movies.append(info)
+                    elif '电影 推荐' in goal[1] and info not in goal[1]:
+                        movies.append(info)
+                    actor = entity
+            elif actor != '' and entity != actor and '电影 推荐' not in goal[1]: # '电影推荐', '电影推荐'
+                actor0 = actor
+                movies0 = movies
+                actor = ''
+                movies = []   
         if relation in ['适合吃', '特色菜']:
             food = info
         if relation == '地址':
             restaurant.append(entity)
         if relation == '评论' and entity.replace(' ', '') in dataset_bug_movies and entity not in movies and entity not in songs and entity not in actors and entity not in goal[0] and entity not in goal[1]:  # dataset bug: no acting knowledge
             movies.append(entity)
+        if entity == address:
+            weather = info
+        if relation == "喜欢":
+            like.append(info)
+        if relation == "喜欢 的 新闻":
+            like.append([info,'最 喜欢 的 新闻'])
             # print(entity)
-            
-
+        for idx,p in enumerate(like):
+            if not isinstance(p,list):
+                if relation == "演唱"  and p == info: 
+                    like[idx] = [p, "最 喜欢 的 歌曲"]
+                # ["林心如", "主演", "大喜临门"]
+                if relation == '主演' and entity in actors and p == info:# 问 User 最 喜欢 的 电影 名 ？ ["孙芳倩", "喜欢", "大喜临门"]
+                    like[idx] = [p, "最 喜欢 的 电影"]
+                if relation == '主演' and entity in actors and p == entity: # 问 User 最 喜欢   『 大喜临门 』   的 哪个 主演 ["孙芳倩", "喜欢", "林心如"] 
+                    like[idx] = [p, "最 喜欢 的 主演"]
+    for idx,p in enumerate(like):
+        if not isinstance(p,list):
+            like[idx] = [p, "最 喜欢 的 明星"]
     # if size of items is more than two, delete accepted item
     if len(movies) > 1:
-        movies = [m for m in movies if m not in accept_movies]
+        movies = [m for m in movies if (m not in accept_movies and m not in favorite_movies)]
     if len(songs) > 1:
-        songs = [s for s in songs if s not in accept_songs]
+        songs = [s for s in songs if (s not in accept_songs and s not in favorite_songs)]
 
     # goal sequence length is four
     if goal[2].startswith('[4] 再见'):
         goal_fill = [[2, '']]
-        if goal[1].startswith('[3] 新闻 推荐'):  # (4):1 寒暄  2 提问  3 新闻 推荐
-            goal_fill = [[2, '提问', '最 喜欢 的 新闻']]
+        if goal[1].startswith('[3] 新闻 推荐'):  
+            if like != []:
+                # (4):1 寒暄  2 提问  3 新闻 推荐
+                goal_fill = [[2, '提问', '最 喜欢 的 新闻']]
+            else:
+                # ['问日期'/'问答', '关于明星的聊天', '新闻推荐', '再见']
+                celebrity = re.findall('『[^』]*』', goal[1])[0][2:-2]
+                goal_fill = [[2, '关于 明星 的 聊天', celebrity]]
         elif goal[1].startswith('[3] 兴趣点 推荐'):  # (6):1 问 天气  2 美食 推荐  3 兴趣点 推荐
             goal_fill = [[2, '美食 推荐', food]]
         elif goal[1].startswith('[3] 电影 推荐'):  # (12):1 问答  2 关于 明星 的 聊天  3 电影 推荐  or (13):1 问 日期  2 关于 明星 的 聊天  3 电影 推荐
@@ -98,19 +138,24 @@ def fill_goal(i):
             goal_fill = [[2, '关于 明星 的 聊天', celebrity]]
 
             if celebrity == '' or celebrity == None:
-                fail(goal, kg)
-                fail_flag = True
+                if actor0 != '' and len(movies0) != 0:
+                    # ['寒暄', '电影推荐', '电影推荐', '再见']
+                    goal_fill = [[2, '电影 推荐', movies0]]
+                else:
+                    fail(goal, kg)
+                    fail_flag = True
 
-        elif goal[1].startswith('[3] 播放 音乐'):  # (22):1 音乐 点播  2 音乐 推荐  3 播放 音乐 (21):1 问 天气  2 音乐 推荐  3 播放 音乐
+        elif goal[1].startswith('[3] 播放 音乐'):  # (22):1 音乐 点播/问 天气/寒暄  2 音乐 推荐  3 播放 音乐
             play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
             songs.remove(play_song)
             songs = songs + [play_song]
             goal_fill = [[2, '音乐 推荐', songs]]
-
             if len(songs) == 0:
                 fail(goal, kg)
                 fail_flag = True
-
+        elif goal[1].startswith('[3] 美食 推荐'):
+            # ['寒暄'/问时间, '天气信息推送', '美食推送', '再见']
+            goal_fill = [[2, "天气 信息 推送"]]
         else:
             fail(goal, kg)
             fail_flag = True
@@ -126,13 +171,15 @@ def fill_goal(i):
                 fail(goal, kg)
                 fail_flag = True
 
-            if len(songs) > 0:  # #(3):1 寒暄  2 音乐 推荐  3 关于 明星 的 聊天  4 新闻 推荐
+            if len(songs) > 0:  # #(3):1 寒暄/问天气/音乐点播  2 音乐 推荐  3 关于 明星 的 聊天  4 新闻 推荐
                 goal_fill = [[2, '音乐 推荐', songs], [3, '关于 明星 的 聊天', celebrity]]
 
             elif len(movies) > 0:   # (24):1 寒暄  2 电影 推荐  3 关于 明星 的 聊天  4 新闻 推荐
                 goal_fill = [[2, '电影 推荐', movies], [3, '关于 明星 的 聊天', celebrity]]
-
-            else:
+            elif like != []:
+                # ['寒暄', '提问', '关于明星的聊天', '新闻推荐', '再见']
+                goal_fill = [[2, '提问', like[0][1]], [3, '关于 明星 的 聊天', celebrity]]
+            else:    
                 fail(goal, kg)
                 fail_flag = True
 
@@ -146,7 +193,6 @@ def fill_goal(i):
                 if birthday_person == '' or birthday_person == None or len(movies) == 0:
                     fail(goal, kg)
                     fail_flag = True
-
             elif goal[0].startswith('[1] 寒暄'):  # (11):1 寒暄  2 音乐 推荐  3 关于 明星 的 聊天  4 电影 推荐
                 if len(songs) > 0:
                     goal_fill = [[2, '音乐 推荐', songs], [3, '关于 明星 的 聊天', singer]]
@@ -162,24 +208,54 @@ def fill_goal(i):
                     if actor == '' or actor == None:
                         fail(goal, kg)
                         fail_flag = True
+                elif like != []: # ['寒暄', '提问', '关于明星的聊天', '电影推荐', '再见']
+                    goal_fill = [[2, '提问', like[0][1]], [3, '关于 明星 的 聊天', actor]]
+                    if actor == '' or actor == None:
+                        fail(goal, kg)
+                        fail_flag = True
                 else:
                     fail(goal, kg)
                     fail_flag = True
+            elif goal[0].startswith('[1] 新闻 点播'):
+                # ['新闻点播', '新闻推荐', '关于明星的聊天', '电影推荐', '再见']
+                goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '电影 推荐', movies]]
 
+                if news_of == '' or news_of == None or news == '' or news == None or len(movies) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif goal[0].startswith('[1] 问 天气') or goal[0].startswith('[1] 音乐 点播'):
+                if len(songs) > 0:
+                    # ['音乐点播'/问天气, '音乐推荐', '关于明星的聊天', '电影推荐', '再见']
+                    goal_fill = [[2, '音乐 推荐', songs], [3, '关于 明星 的 聊天', singer]]
+
+                if singer == '' or singer == None:
+                    fail(goal, kg)
+                    fail_flag = True
             else:
                 fail(goal, kg)
                 fail_flag = True
 
-        elif goal[1].startswith('[4] 播放 音乐'):  # (19):1 问答  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐  (20):1 问 日期  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐
+        elif goal[1].startswith('[4] 播放 音乐'):  
             play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
             songs.remove(play_song)
             songs = songs + [play_song]
-            goal_fill = [[2, '关于 明星 的 聊天', singer], [3, '音乐 推荐', songs]]
+            if goal[0].startswith('[1] 问答') or goal[0].startswith('[1] 问 日期'):# (19):1 问答  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐  (20):1 问 日期  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐
+                goal_fill = [[2, '关于 明星 的 聊天', singer], [3, '音乐 推荐', songs]]
 
-            if singer == '' or singer == None or len(songs) == 0:
+                if singer == '' or singer == None or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif goal[0].startswith('[1] 寒暄') or goal[0].startswith('[1] 问 时间'): # ['寒暄'/问时间, '天气信息推送', '音乐推荐', '播放音乐', '再见'] 
+                goal_fill = [[2, '天气 信息 推送'], [3, '音乐 推荐', songs]]
+
+                if len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True     
+            else:
                 fail(goal, kg)
-                fail_flag = True
-
+                fail_flag = True             
+        elif goal[1].startswith('[4] 兴趣点 推荐'):  # ['寒暄'/问时间, '天气信息推送', '美食推送', 'POI推荐', '再见']
+            goal_fill = [[2, '天气 信息 推送'], [3, '美食 推荐', food]]
         else:
             fail(goal, kg)
             fail_flag = True
@@ -193,21 +269,54 @@ def fill_goal(i):
         if goal[1].startswith('[5] 问 User 爱好'):  #(14):1 寒暄  2 问 User 姓名  3 问 User 性别  4 问 User 年龄  5 问 User 爱好
             goal_fill = [[2, '问 User 姓名'],  [3, '问 User 性别'],  [4, '问 User 年龄']]
         elif goal[1].startswith('[5] 电影 推荐'):
-            if news_of == '':  # (8):1 寒暄  2 提问  3 提问  4 关于 明星 的 聊天  5 电影 推荐
-                goal_fill = [[2, '提问', '最 喜欢 的 电影'], [3, '提问', '最 喜欢 的 主演'], [4, '关于 明星 的 聊天', actor]]
-
-                if actor == '' or actor == None:
-                    fail(goal, kg)
-                    fail_flag = True
-            else:  # (7):1 寒暄  2 新闻 推荐  3 关于 明星 的 聊天  4 电影 推荐  5 电影 推荐
+            if len(like) == 0 and news_of != '' and news!= '' or goal[0].startswith('[1] 新闻 点播'):
+                # (7):1 寒暄/新闻点播  2 新闻 推荐  3 关于 明星 的 聊天  4 电影 推荐  5 电影 推荐
                 goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '电影 推荐', movies]]
 
                 if news_of == '' or news_of == None or news == '' or news == None or len(movies) == 0:
                     
                     fail(goal, kg)
                     fail_flag = True
+            elif len(like) > 1:
+                # (8):1 寒暄  2 提问  3 提问  4 关于 明星 的 聊天  5 电影 推荐
+                goal_fill = [[2, '提问', '最 喜欢 的 电影'], [3, '提问', '最 喜欢 的 主演'], [4, '关于 明星 的 聊天', actor]]
 
-        elif goal[1].startswith('[5] 播放 音乐'):  # (16):1 问 日期  2 关于 明星 的 聊天  3 电影 推荐  4 音乐 推荐  5 播放 音乐
+                if actor == '' or actor == None:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif weather != '':
+                # ['问时间'/寒暄, '天气信息推送', '音乐推荐', '关于明星的聊天', '电影推荐', '再见']
+                goal_fill = [[2, '天气 信息 推送'], [3, '音乐 推荐', songs], [4, '关于 明星 的 聊天', singer]]
+                if singer == '' or singer == None or len(movies) == 0 or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif goal[0].startswith('[1] 寒暄') and len(like) > 0:
+                if news == '' or news_of == '':
+                    # ['寒暄', '提问', '关于明星的聊天', '电影推荐', '电影推荐', '再见']
+                    goal_fill = [[2, '提问', like[0][1]], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies]]
+
+                    if actor == '' or actor == None or len(movies) == 0:
+                        fail(goal, kg)
+                        fail_flag = True
+                else:
+                    # ['寒暄', '提问', '新闻推荐', '关于明星的聊天', '电影推荐', '再见']
+                    goal_fill = [[2, '提问', like[0][1]], [3, '新闻 推荐', news_of, news], [4, '关于 明星 的 聊天', actor]]
+
+                    if actor == '' or actor == None or len(movies) == 0:
+                        fail(goal, kg)
+                        fail_flag = True
+            elif len(songs) > 0:
+                # ['寒暄'/问天气/音乐点播, '音乐推荐', '关于明星的聊天', '电影推荐', '电影推荐', '再见']
+                goal_fill = [[2, '音乐 推荐', songs], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies]]
+
+                if actor == '' or actor == None or len(movies) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            else:
+                fail(goal, kg)
+                fail_flag = True
+
+        elif goal[1].startswith('[5] 播放 音乐'): 
             play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
             songs.remove(play_song)
             songs = songs + [play_song]
@@ -221,30 +330,166 @@ def fill_goal(i):
                 if celebrity == '' or celebrity == None or len(movies) == 0 or len(songs) == 0:
                     fail(goal, kg)
                     fail_flag = True
-                return goal_fill  # fix code logical bug
-            if len(movies) != 0:  # (18):1 寒暄  2 电影 推荐  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
+            elif len(movies) != 0:  # (18):1 寒暄  2 电影 推荐  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
                 goal_fill = [[2, '电影 推荐', movies], [3, '关于 明星 的 聊天', actor], [4, '音乐 推荐', songs]]
 
                 if len(movies) == 0 or actor == '' or actor == None or len(songs) == 0:
                     fail(goal, kg)
                     fail_flag = True                
-                elif news != '' and news_of != '':
-                    goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '音乐 推荐', songs]]
-
-                    if len(songs) == 0:
-                        fail(goal, kg)
-                        fail_flag = True
-
-            else:  # (17):1 寒暄  2 提问  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
+            elif len(like) > 0:  # (17):1 寒暄  2 提问  3 关于 明星 的 聊天  4 音乐 推荐  5 播放 音乐
                 goal_fill = [[2, '提问', '最 喜欢 的 歌曲'], [3, '关于 明星 的 聊天', singer], [4, '音乐 推荐', songs]]
 
                 if singer == '' or singer == None or len(songs) == 0:
                     fail(goal, kg)
                     fail_flag = True
+            elif news != '' and news_of != '':
+                # ['寒暄'/新闻点播, '新闻推荐', '关于明星的聊天', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', news_of], [4, '音乐 推荐', songs]]
+                if len(songs) == 0:
+                        fail(goal, kg)
+                        fail_flag = True
+            elif actor0 != '' and len(movies0) != 0:
+                # ['寒暄', '电影推荐', '电影推荐', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '电影 推荐', movies0], [3, '电影 推荐', movies], [4, '音乐 推荐', songs]]
+                if len(songs) == 0 or len(movies) == 0:
+                        fail(goal, kg)
+                        fail_flag = True
+            else:
+                fail(goal, kg)
+                fail_flag = True
+        elif goal[1].startswith('[5] 新闻 推荐'):
+            if weather != '':
+                # ['问时间'/寒暄, '天气信息推送', '音乐推荐', '关于明星的聊天', '新闻推荐', '再见']
+                goal_fill = [[2, '天气 信息 推送'], [3, '音乐 推荐', songs], [4, '关于 明星 的 聊天', singer]]
+                if singer == '' or singer == None or len(movies) == 0 or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif len(like) > 1:
+                # ['寒暄', '提问', '提问', '关于明星的聊天', '新闻推荐', '再见']
+                goal_fill = [[2, '提问', like[0][1]], [3, '提问', like[1][1]], [4, '关于 明星 的 聊天', like[1][0]]]
+            elif actor0 != '' and len(movies0) != 0:
+                # ['寒暄', '电影推荐', '电影推荐', '关于明星的聊天', '新闻推荐', '再见']
+                goal_fill = [[2, '电影 推荐', movies0], [3, '电影 推荐', movies], [4, '关于 明星 的 聊天', actor]]
+                if len(songs) == 0 or len(movies) == 0 or actor == '':
+                        fail(goal, kg)
+                        fail_flag = True
+            else:
+                fail(goal, kg)
+                fail_flag = True
+        else:
+            fail(goal, kg)
+            fail_flag = True
         return goal_fill
 
     elif goal[2].startswith("[7] 再见"):
-        goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies], [5, '音乐 推荐', songs]]
+        if goal[1].startswith('[6] 播放 音乐'):
+            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
+            songs.remove(play_song)
+            songs = songs + [play_song]
+            if goal[0].startswith('[1] 新闻 点播'):
+                # ['新闻点播', '新闻推荐', '关于明星的聊天', '电影推荐', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies], [5, '音乐 推荐', songs]]
+                if actor == '' or actor == None or len(movies) == 0 or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif news != '' and news_of != '' and len(like) == 0:
+                # ['寒暄', '新闻推荐', '关于明星的聊天', '电影推荐', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '新闻 推荐', news_of, news], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies], [5, '音乐 推荐', songs]]
+
+                if actor == '' or actor == None or len(movies) == 0 or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif news != '' and news_of != '' and len(like) > 0:
+                # ['寒暄', '提问', '新闻推荐', '关于明星的聊天', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '提问', like[0][1]], [3, '新闻 推荐', news_of, news], [4, '关于 明星 的 聊天', singer], [5, '音乐 推荐', songs]]
+
+                if singer == '' or singer == None or len(movies) == 0 or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif len(like) > 0 and len(movies) > 0:
+                # ['寒暄', '提问', '关于明星的聊天', '电影推荐', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '提问', like[0][1]], [3, '关于 明星 的 聊天', actor], [4, '电影 推荐', movies], [5, '音乐 推荐', songs]]
+
+                if actor == '' or actor == None or len(movies) == 0 or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif len(like) > 1:
+                # ['寒暄', '提问', '提问', '关于明星的聊天', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '提问', like[0][1]], [3, '提问', like[1][1]], [4, '关于 明星 的 聊天', singer], [5, '音乐 推荐', songs]]
+
+                if singer == '' or singer == None or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif actor0 != 0 and len(movies0) != 0:
+                # ['寒暄', '电影推荐', '电影推荐', '关于明星的聊天', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '电影 推荐', movies0], [3, '电影 推荐', movies], [4, '关于 明星 的 聊天', singer], [5, '音乐 推荐', songs]]
+
+                if singer == '' or singer == None or len(songs) == 0 or len(movies) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            else: 
+                fail(goal, kg)
+                fail_flag = True
+            
+        elif goal[1].startswith('[6] 新闻 推荐'):
+            # ['寒暄', '电影推荐', '电影推荐', '音乐推荐', '关于明星的聊天', '新闻推荐', '再见']
+            if actor0 != 0 and len(movies0) != 0:
+                # ['寒暄', '电影推荐', '电影推荐', '关于明星的聊天', '音乐推荐', '播放音乐', '再见']
+                goal_fill = [[2, '电影 推荐', movies0], [3, '电影 推荐', movies], [4, '音乐 推荐', songs], [5, '关于 明星 的 聊天', singer]]
+
+                if singer == '' or singer == None or len(songs) == 0 or len(movies) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+        elif goal[1].startswith('[6] 电影 推荐'):
+            if weather != '' and weather != None:
+                # ['寒暄'/问时间, '天气信息推送', '音乐推荐', '关于明星的聊天', '电影推荐', '电影推荐', '再见']
+                goal_fill = [[2, '天气 信息 推送'], [3, '音乐 推荐', songs], [4, '关于 明星 的 聊天', singer], [5, '电影 推荐', movies]]
+                if singer == '' or singer == None or len(movies) == 0 or len(songs) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif len(like) > 0 and news != '' and news_of != '':
+                # ['寒暄', '提问', '新闻推荐', '关于明星的聊天', '电影推荐', '电影推荐', '再见']
+                goal_fill = [[2, '提问', '最 喜欢 的 新闻'], [3, '新闻 推荐', news_of, news], [4, '关于 明星 的 聊天', actor], [5, '电影 推荐', movies]]
+
+                if actor == '' or actor == None or len(movies) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            elif len(like) > 1:
+                # ['寒暄', '提问', '提问', '关于明星的聊天', '电影推荐', '电影推荐', '再见']
+                goal_fill = [[2, '提问', like[0][1]], [2, '提问', like[1][1]], [4, '关于 明星 的 聊天', actor], [5, '电影 推荐', movies]]
+
+                if singer == '' or singer == None or actor == '' or actor == None or len(movies) == 0:
+                    fail(goal, kg)
+                    fail_flag = True
+            else:
+                fail(goal, kg)
+                fail_flag = True
+        else:
+            fail(goal, kg)
+            fail_flag = True
+        return goal_fill
+
+    elif goal[2].startswith("[8] 再见"):
+        play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
+        songs.remove(play_song)
+        songs = songs + [play_song]
+        if news != '' and news_of != '':
+            # ['寒暄', '提问', '新闻推荐', '关于明星的聊天', '电影推荐', '音乐推荐', '播放音乐', '再见']
+            goal_fill = [[2, '提问', '最 喜欢 的 新闻'], [3, '新闻 推荐', news_of, news], [4, '关于 明星 的 聊天', actor], [5, '电影 推荐', movies], [6, '音乐 推荐', songs]]
+
+            if actor == '' or actor == None or len(movies) == 0 or len(songs) == 0:
+                fail(goal, kg)
+                fail_flag = True
+        elif len(like) > 1:
+            # ['寒暄', '提问', '提问', '关于明星的聊天', '电影推荐', '音乐推荐', '播放音乐', '再见']    
+            goal_fill = [[2, '提问', like[0][1]], [2, '提问', like[1][1]], [4, '关于 明星 的 聊天', actor], [5, '电影 推荐', movies], [6, '音乐 推荐', songs]]
+
+            if singer == '' or singer == None or actor == '' or actor == None or len(movies) == 0 or len(songs) == 0:
+                fail(goal, kg)
+                fail_flag = True
+        else:
+            fail(goal, kg)
+            fail_flag = True
         return goal_fill
     else:
         fail(goal, kg)
