@@ -14,15 +14,9 @@ def read_file(path):
     with open(path, 'r', encoding='utf-8') as f:
         return eval(f.read())
 
-<<<<<<< HEAD
 type2idx = read_file("goal_fill/type/goal_type_dict.txt")
 idx2type = list(type2idx.keys())
 type_nb = read_file("goal_fill/type/goal_type_neighbour.txt")
-=======
-type2idx = read_file("type/goal_type_dict.txt")
-idx2type = list(type2idx.keys())
-type_nb = read_file("type/goal_type_neighbour.txt")
->>>>>>> 08a078074d4a1500193cef52d576315b0cfc6513
 
 def get_goal_type_entity(goal):
     kg_flag = ["参考知识"]

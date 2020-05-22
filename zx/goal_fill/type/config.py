@@ -19,19 +19,11 @@ class Config:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.save_path = "next_goal_type.pt"
 
-<<<<<<< HEAD
         with open('goal_fill/others/word_dict.txt', 'r', encoding='utf-8') as f:
             self.word_dict = eval(f.read())
 
         # print(os.getcwd())
         with open('goal_fill/type/goal_type_dict.txt', 'r', encoding='utf-8') as f:
-=======
-        with open('others/word_dict.txt', 'r', encoding='utf-8') as f:
-            self.word_dict = eval(f.read())
-
-        # print(os.getcwd())
-        with open('type/goal_type_dict.txt', 'r', encoding='utf-8') as f:
->>>>>>> 08a078074d4a1500193cef52d576315b0cfc6513
             self.goal_type_size = len(eval(f.read()))
 
 if __name__ == '__main__':

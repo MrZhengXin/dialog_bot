@@ -4,11 +4,7 @@ import datetime
 import re
 import random
 
-<<<<<<< HEAD
 from goal_fill.goal_fill_predict import predict_goal
-=======
-from zx.goal_fill.goal_fill_predict import predict_goal
->>>>>>> 08a078074d4a1500193cef52d576315b0cfc6513
 
 actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤', '林心如', '杨幂', '周迅', '成龙', '刘若英', '舒淇', '张学友', '张柏芝', '刘德华', '郭富城', '周杰伦', '张国荣', '林志颖', '何炅', '谢霆锋'}
 dataset_bug_movies = {'新边缘人', '一起飞', '阿飞正传', '金鸡2', '亚飞与亚基', '倩女幽魂Ⅲ：道道道', '城市猎人', '地球四季', '中国合伙人', '笑傲江湖', '救火英雄', '旺角黑夜', '男人四十', '无问西东', '太平轮·彼岸', '男儿本色', '新警察故事', '十二夜', '逆战', '太平轮（上）', '消失的子弹', '李米的猜想', '证人', '亚飞与亚基', '叶问2：宗师传奇', '忘不了', '苏州河', '钟无艳', '暴疯语', '鸳鸯蝴蝶', '金鸡2', '白兰', '线人', '情迷大话王', '异灵灵异-2002'}
@@ -573,8 +569,4 @@ if __name__ == '__main__':
         data_cnt += 1
         data = json.loads(line)
         print(fill_test(data), file=f)
-<<<<<<< HEAD
     print('fail_cnt:', fail_cnt)
-=======
-    print('fail_cnt:', fail_cnt)
->>>>>>> 08a078074d4a1500193cef52d576315b0cfc6513
