@@ -40,7 +40,7 @@ def ks_in_kg(ks, kg, conversation):
     for k in kg:
         strk = str(k)
         if strk in ks:
-            if k[1] not in ['成就', '获奖', '评价', '简介'] or k[2] in conversation:
+            if k[1] not in ['成就', '获奖', '评价', '简介'] or k[2].replace(' ', '') in conversation.replace(' ', ''):
                 return False
             ks.remove(strk)
     return len(ks) == 0
@@ -198,7 +198,7 @@ def process_input(i):
             hello_info.append(i['user_profile']['性别'])
             if '年龄区间' in str(i['user_profile']):
                 hello_info.append(i['user_profile']['年龄区间'])
-        return conversation, goal_info, kg, entity_dict, i['user_profile']['姓名'], "φ".join(hello_info)
+        return conversation, goal_info, kg, entity_dict, [goal_info[0]], i['user_profile']['姓名'], "φ".join(hello_info)
     else:
         # add goal transition
         current_goal_stage = max(len(set(re.findall('\[[1-9]\]', ''.join(conversation)))), 1)
@@ -219,8 +219,9 @@ def process_input(i):
             chat = celebrity_chat[celebrity]
             for ks, r in zip(chat.keys(), chat.values()):
                 ks = eval(ks)
-                if ks_in_kg(ks, kg, conversation):
+                if ks_in_kg(ks, kg, ''.join(conversation)):
                     goal_transition[pos] += [eval(uk)[1:] for uk in ks]
+                    # print(goal_transition)
                     break
 
         if '新闻' in goal_transition[0][1]:
