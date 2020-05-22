@@ -22,7 +22,7 @@ def fail(data):
         'goal': goal,
         'kg': kg
     }
-    print(json.dumps(info, ensure_ascii=False), file=debug)
+    # print(json.dumps(info, ensure_ascii=False), file=debug)
     bug_movie = set()
     for i in kg:
         if i[1] == '评论' and i[0] not in actors:
