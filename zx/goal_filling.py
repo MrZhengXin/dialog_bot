@@ -6,7 +6,7 @@ import random
 
 
 actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤', '林心如', '杨幂', '周迅', '成龙', '刘若英', '舒淇', '张学友', '张柏芝', '刘德华', '郭富城', '周杰伦', '张国荣', '林志颖', '何炅', '谢霆锋'}
-dataset_bug_movies = {'新边缘人', '一起飞', '阿飞正传', '金鸡2', '亚飞与亚基', '倩女幽魂Ⅲ：道道道', '城市猎人', '地球四季', '中国合伙人', '笑傲江湖', '救火英雄', '旺角黑夜', '男人四十', '无问西东', '太平轮·彼岸', '男儿本色', '新警察故事', '十二夜', '逆战', '太平轮（上）', '消失的子弹', '李米的猜想', '证人', '亚飞与亚基', '叶问2：宗师传奇', '忘不了', '苏州河', '钟无艳', '暴疯语', '鸳鸯蝴蝶', '金鸡2', '白兰', '线人', '情迷大话王', '异灵灵异-2002'}
+dataset_bug_movies = {'新边缘人', '一起飞', '阿飞正传', '金鸡2', '亚飞与亚基', '倩女幽魂Ⅲ：道道道', '城市猎人', '地球四季', '中国合伙人', '笑傲江湖', '救火英雄', '旺角黑夜', '男人四十', '无问西东', '太平轮·彼岸', '男儿本色', '新警察故事', '十二夜', '逆战', '太平轮（上）', '消失的子弹', '李米的猜想', '证人', '亚飞与亚基', '叶问2：宗师传奇', '忘不了', '苏州河', '钟无艳', '暴疯语', '鸳鸯蝴蝶', '金鸡2', '白兰', '线人', '情迷大话王', '异灵灵异-2002', '喋血街头'}
 fail_cnt = 0
 def fail(goal, kg):
     global fail_cnt
@@ -44,6 +44,10 @@ def fill_goal(i):
     accept_songs = i['user_profile']['接受 的 音乐']if '接受 的 音乐' in i['user_profile'].keys() else {}
     favorite_movies = i['user_profile']['喜欢 的 电影'] if '喜欢 的 电影' in i['user_profile'].keys() else {}
     favorite_songs = i['user_profile']['喜欢 的 音乐'] if '喜欢 的 音乐' in i['user_profile'].keys() else {}
+    accept_movies = [p.replace(" ","") for p in accept_movies]
+    accept_songs = [p.replace(" ","") for p in accept_songs]
+    favorite_movies = [p.replace(" ","") for p in favorite_movies]
+    favorite_songs = [p.replace(" ","") for p in favorite_songs]
 
     if 'history' in i.keys():
         conversation = i['history']
@@ -65,9 +69,10 @@ def fill_goal(i):
     address = i['user_profile']['居住地'] if "居住地" in i['user_profile'].keys() else ''
     for j in kg:
         entity, relation, info = j
+        entity, relation, info = entity.replace(" ",""), relation.replace(" ",""), info.replace(" ","")
         if relation == '新闻':
             news_of, news = entity, info
-        if relation == '演唱' and info not in goal[0] and info not in accept_songs:
+        if relation == '演唱' and info not in goal[0].replace(" ","") and info not in accept_songs:
             if info not in songs:
                 songs.append(info)
             singer = entity
@@ -75,10 +80,10 @@ def fill_goal(i):
             birthday_person = entity
         if relation == '主演' and entity in actors:  # avoid sth like ["星月童话", "主演", "张国荣   常盘贵子"]
             if actor == '' or entity == actor:
-                if info not in movies and info not in accept_movies and info not in goal[0]:
+                if info not in movies and info not in goal[0].replace(" ",""):
                     if '电影 推荐' not in goal[1]:# movie：亲爱的 song:亲爱的小孩
                         movies.append(info)
-                    elif '电影 推荐' in goal[1] and info not in goal[1]:
+                    elif '电影 推荐' in goal[1] and info not in goal[1].replace(" ",""):
                         movies.append(info)
                     actor = entity
             elif actor != '' and entity != actor and '电影 推荐' not in goal[1]: # '电影推荐', '电影推荐'
@@ -90,13 +95,13 @@ def fill_goal(i):
             food = info
         if relation == '地址':
             restaurant.append(entity)
-        if relation == '评论' and entity.replace(' ', '') in dataset_bug_movies and entity not in movies and entity not in songs and entity not in actors and entity not in goal[0] and entity not in goal[1]:  # dataset bug: no acting knowledge
+        if relation == '评论' and entity.replace(' ', '') in dataset_bug_movies and entity not in movies and entity not in songs and entity not in actors and entity not in goal[0].replace(" ","") and entity not in goal[1].replace(" ",""):  # dataset bug: no acting knowledge
             movies.append(entity)
         if entity == address:
             weather = info
         if relation == "喜欢":
             like.append(info)
-        if relation == "喜欢 的 新闻":
+        if relation == "喜欢的新闻":
             like.append([info,'最 喜欢 的 新闻'])
             # print(entity)
         for idx,p in enumerate(like):
@@ -126,7 +131,7 @@ def fill_goal(i):
                 goal_fill = [[2, '提问', '最 喜欢 的 新闻']]
             else:
                 # ['问日期'/'问答', '关于明星的聊天', '新闻推荐', '再见']
-                celebrity = re.findall('『[^』]*』', goal[1])[0][2:-2]
+                celebrity = re.findall('『[^』]*』', goal[1])[0][2:-2].replace(" ","")
                 goal_fill = [[2, '关于 明星 的 聊天', celebrity]]
         elif goal[1].startswith('[3] 兴趣点 推荐'):  # (6):1 问 天气  2 美食 推荐  3 兴趣点 推荐
             goal_fill = [[2, '美食 推荐', food]]
@@ -146,7 +151,7 @@ def fill_goal(i):
                     fail_flag = True
 
         elif goal[1].startswith('[3] 播放 音乐'):  # (22):1 音乐 点播/问 天气/寒暄  2 音乐 推荐  3 播放 音乐
-            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
+            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2].replace(" ","")
             songs.remove(play_song)
             songs = songs + [play_song]
             goal_fill = [[2, '音乐 推荐', songs]]
@@ -165,7 +170,7 @@ def fill_goal(i):
     # goal sequence is five
     elif goal[2].startswith('[5] 再见'):
         if goal[1].startswith('[4] 新闻 推荐'):
-            celebrity = re.findall('『[^』]*』', goal[1])[0][2:-2]
+            celebrity = re.findall('『[^』]*』', goal[1])[0][2:-2].replace(" ","")
 
             if celebrity == '' or celebrity == None:
                 fail(goal, kg)
@@ -236,7 +241,7 @@ def fill_goal(i):
                 fail_flag = True
 
         elif goal[1].startswith('[4] 播放 音乐'):  
-            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
+            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2].replace(" ","")
             songs.remove(play_song)
             songs = songs + [play_song]
             if goal[0].startswith('[1] 问答') or goal[0].startswith('[1] 问 日期'):# (19):1 问答  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐  (20):1 问 日期  2 关于 明星 的 聊天  3 音乐 推荐  4 播放 音乐
@@ -317,7 +322,7 @@ def fill_goal(i):
                 fail_flag = True
 
         elif goal[1].startswith('[5] 播放 音乐'): 
-            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
+            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2].replace(" ","")
             songs.remove(play_song)
             songs = songs + [play_song]
             if goal[0].startswith('[1] 问 日期') or goal[0].startswith('[1] 问答'):
@@ -383,7 +388,7 @@ def fill_goal(i):
 
     elif goal[2].startswith("[7] 再见"):
         if goal[1].startswith('[6] 播放 音乐'):
-            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
+            play_song = re.findall('『[^』]*』', goal[1])[0][2:-2].replace(" ","")
             songs.remove(play_song)
             songs = songs + [play_song]
             if goal[0].startswith('[1] 新闻 点播'):
@@ -470,7 +475,7 @@ def fill_goal(i):
         return goal_fill
 
     elif goal[2].startswith("[8] 再见"):
-        play_song = re.findall('『[^』]*』', goal[1])[0][2:-2]
+        play_song = re.findall('『[^』]*』', goal[1])[0][2:-2].replace(" ","")
         songs.remove(play_song)
         songs = songs + [play_song]
         if news != '' and news_of != '':
@@ -503,7 +508,7 @@ def extract_info_from_goal(goal):
         return [no, '再见']
     action = re.findall(']\s*([^(]*?)\s*\(', goal)[0]
     sth = re.findall('『[^』]*』', goal)
-    sth = [s[2:-2] for s in sth]
+    sth = [s[2:-2].replace(" ","") for s in sth]
     if action == '问答':
         return [no, action, sth[0], sth[1]]
     if action == '提问':
