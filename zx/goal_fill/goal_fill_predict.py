@@ -129,6 +129,10 @@ def predict_goal(data):
     movies = [m for m in movies if (m not in accept_movies and m not in like_movies)]
     songs = [s for s in songs if (s not in accept_songs and s not in like_songs)]
 
+    if final_type == "播放音乐":
+        songs.remove(final_entity)
+        # songs.append(final_entity)
+
     movie_idx, song_idx, like_idx, star_idx, news_used, food_used = 0, 0, 0, 0, False, False
     while cur_id < max_id:
         dialog_idx_seq.append(cur_id)
@@ -146,10 +150,11 @@ def predict_goal(data):
             if final_type not in ask_user_type and nb_name in ask_user_type:
                 continue
             if final_type == nb_name or nb in type_seq:
-                if not (final_type == "电影推荐" and nb_name == "电影推荐"):
+                # if not ((final_type == "电影推荐" and nb_name == "电影推荐") or nb_name == "音乐推荐"):
+                if nb_name not in ['电影推荐', '音乐推荐']:
                     continue
-            if final_type == "播放音乐" and cur_id != max_id and nb_name == "音乐推荐":
-                continue
+            # if final_type == "播放音乐" and cur_id != max_id and nb_name == "音乐推荐":
+            #     continue
             if len(type_nb[last_type_id]) > 2:
                 if nb_name in ['再见', '寒暄', '播放音乐']:
                     continue
@@ -174,6 +179,11 @@ def predict_goal(data):
 
         if last_type_name == "提问" and len(likes) > 0 and like_idx < len(likes):
             next_type = type2idx["提问"]
+        if cur_id == max_id and final_type == "播放音乐":
+            next_type = type2idx["音乐推荐"]
+            type_seq.append(next_type)
+            entity_seq.append([final_entity])
+            continue
 
         if next_type == None:
             if len(likes) > 0 and like_idx < len(likes):
@@ -198,10 +208,10 @@ def predict_goal(data):
         if next_type_name in ['新闻点播', '播放音乐', '音乐点播', '兴趣点推荐', '天气信息推送', '寒暄', '再见', '问日期', '问天气', '问时间', '问答', '问用户爱好', '问用户年龄', '问用户性别', '问用户姓名']:
             next_entity = [[]]
         elif next_type_name == "电影推荐":
-            next_entity = [movies[movie_idx]]
+            next_entity = [[movies[movie_idx]]]
             movie_idx += 1
         elif next_type_name == "音乐推荐":
-            next_entity = [songs[song_idx]]
+            next_entity = [[songs[song_idx]]]
             song_idx += 1
         elif next_type_name == "提问":
             like_info = likes[like_idx]
@@ -224,7 +234,7 @@ def predict_goal(data):
             next_entity = [[news_of, news]]
             news_used = True
         elif next_type_name == "美食推荐":
-            next_entity = [food]
+            next_entity = [[food]]
             food_used = True
 
         entity_seq += next_entity
@@ -237,4 +247,6 @@ def predict_goal(data):
     for i in range(len(goal_fill)):
         if goal_fill[i][-1] == []:
             goal_fill[i] = goal_fill[i][:-1]
+        if goal_fill[i][1] == "新闻推荐":
+            goal_fill[i] = goal_fill[i][:-1] + goal_fill[i][-1]
     return goal_fill
