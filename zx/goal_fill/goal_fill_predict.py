@@ -234,7 +234,7 @@ def predict_goal(data):
             next_entity = [[news_of, news]]
             news_used = True
         elif next_type_name == "美食推荐":
-            next_entity = [[food]]
+            next_entity = [food]
             food_used = True
 
         entity_seq += next_entity
