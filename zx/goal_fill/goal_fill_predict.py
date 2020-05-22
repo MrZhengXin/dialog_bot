@@ -179,6 +179,11 @@ def predict_goal(data):
 
         if last_type_name == "提问" and len(likes) > 0 and like_idx < len(likes):
             next_type = type2idx["提问"]
+            if "电影" in entity_seq[-1]:
+                entity_seq.append("最 喜欢 的 主演")
+                like_idx += 1
+                type_seq.append(next_type)
+                continue
         if cur_id == max_id and final_type == "播放音乐":
             next_type = type2idx["音乐推荐"]
             type_seq.append(next_type)
@@ -215,18 +220,22 @@ def predict_goal(data):
             song_idx += 1
         elif next_type_name == "提问":
             like_info = likes[like_idx]
+            like_idx += 1
             for key, value in data['user_profile'].items():
                 if "喜欢" not in key:
                     continue
                 if isinstance(value, list):
                     for v in value:
                         if like_info in v.replace(' ', ''):
-                            next_entity = [key]
+                            if '最' not in key:
+                                key = ['最 ' + key]
+                            next_entity = key
                             break
                 elif like_info in value.replace(' ', ''):
-                    next_entity = [key]
+                    if '最' not in key:
+                        key = ['最 ' + key]
+                    next_entity = key
                     break
-            like_idx += 1
         elif next_type_name == "关于明星的聊天":
             next_entity = [stars[star_idx]]
             star_idx += 1
