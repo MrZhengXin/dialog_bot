@@ -4,27 +4,10 @@ import regex
 import re
 import datetime
 import argparse
-import goal_filling
+import goal_fill.goal_filling as goal_filling
 import sacrebleu
 import copy
 
-parser = argparse.ArgumentParser(description='input delimiter. [ks]xxx[ks]xxx[ke]xxx[gs]xxx[gs]')
-parser.add_argument('--knowledge_sep', type=str, default='φ')
-parser.add_argument('--knowledge_end', type=str, default='φ')
-parser.add_argument('--conversation_sep', type=str, default='φ')
-parser.add_argument('--goal_stage_sep', type=str, default=' ')
-parser.add_argument('--bot_in_history', type=bool, default=True, help='whether bot response appear in history')
-parser.add_argument('--force_history', type=bool, default=True, help='normally if knowledges were found, no history \
-would needed')
-parser.add_argument('--max_history_length', type=int, default=96)
-parser.add_argument('--max_goal_stage_in_history', type=int, default=2)
-parser.add_argument('--test_json', type=str, default='test_2.json')
-parser.add_argument('--test_source_file', type=str, default='test_2_with_knowledge.src')
-parser.add_argument('--test_generate_file', type=str, default='test_hypo_1(1).txt')
-parser.add_argument('--test_target_file', type=str, default='mbart_test_2_0521.txt')
-parser.add_argument('--source_only', type=bool, default=True)
-
-args = parser.parse_args()
 
 
 actors = {'范冰冰', '黄晓明', '谢娜', '吴亦凡', '王力宏', '黄渤', '林心如', '杨幂', '周迅', '成龙', '刘若英', '舒淇', '张学友', '张柏芝', '刘德华', '郭富城', '周杰伦', '张国荣', '林志颖', '何炅', '谢霆锋'}
@@ -77,6 +60,8 @@ def decode_json(i):
     """
     mask_info = dict()
     conversation = i['history'] if 'history' in i.keys() else i['conversation']
+    if len(conversation) > 0 and conversation[0][0] != '[':
+        conversation[0] = '[1] ' + conversation[0]
     conversation = [c.replace(i['user_profile']['姓名'], 'name') for c in conversation]  # replace user's name
     goal = i['goal'].split(' --> ')
     if '......' in i['goal']:
@@ -198,6 +183,118 @@ def decode_json(i):
         entity_cnt += len(entity_dict)
 
     return conversation, goal_info, kg, entity_dict
+
+
+def process_input(i):
+
+    i = json.loads(i)
+    conversation, goal_info, kg, entity_dict = decode_json(i)
+    goal = i['goal'].split(' --> ')
+
+    if len(conversation) == 0 and '寒暄' in goal[0]:
+        hello_info = ['寒暄', i['situation']]
+        if '带 User 名字' in goal[0]:
+            hello_info.append('name')
+            hello_info.append(i['user_profile']['性别'])
+            if '年龄区间' in str(i['user_profile']):
+                hello_info.append(i['user_profile']['年龄区间'])
+        return conversation, goal_info, kg, entity_dict, i['user_profile']['姓名'], "φ".join(hello_info)
+    else:
+        # add goal transition
+        current_goal_stage = max(len(set(re.findall('\[[1-9]\]', ''.join(conversation)))), 1)
+        current_round = 0
+        for c in conversation[::-1]:
+            current_round += 1
+            if c[0] == '[':
+                break
+
+        goal_transition = copy.deepcopy(goal_info[current_goal_stage - 1:current_goal_stage + 1])
+
+        # add knowledge of celebrity to goal transition
+        # chat about celebrity, add knowledge set that used in training set
+        if (goal_transition[0][1] == '关于 明星 的 聊天' and current_round < 4) or \
+                (1 < len(goal_transition) and current_round >= 2 and goal_transition[1][1] == '关于 明星 的 聊天'):
+            pos = 0 if goal_transition[0][1] == '关于 明星 的 聊天' else 1
+            celebrity = goal_transition[pos][2]
+            chat = celebrity_chat[celebrity]
+            for ks, r in zip(chat.keys(), chat.values()):
+                ks = eval(ks)
+                if ks_in_kg(ks, kg, conversation):
+                    goal_transition[pos] += [eval(uk)[1:] for uk in ks]
+                    break
+
+        if '新闻' in goal_transition[0][1]:
+            goal_transition[0][3] = goal_transition[0][3].replace(' ', '')[:128]
+        if len(goal_transition) > 1 and '新闻' in goal_transition[1][1]:
+            goal_transition[1][3] = goal_transition[1][3].replace(' ', '')[:128]
+        
+        input_str = 'φ'.join([str(gstr) for gstr in goal_transition])+'φ'
+        j = len(conversation)
+        if 0 < j :  # add history
+            add_history = []
+            pos_h = j - 1
+            delta_goal_stage = 0
+            while len(' '.join(add_history) + conversation[pos_h]) < 128 and pos_h >= 0:
+                add_history.append(conversation[pos_h].strip()[:36])
+                if conversation[pos_h][0] == '[':
+                    add_history[-1] += 'φ'
+                    delta_goal_stage += 1
+                    if delta_goal_stage >= 2:
+                        break
+                pos_h -= 1
+            # add_history = [c + ' 。' if c[-1] not in ['！', '？', '。'] else c for c in add_history]
+            input_str += 'φ'.join(add_history[::-1])
+        return conversation, goal_info, kg, entity_dict, goal_transition, i['user_profile']['姓名'], input_str 
+
+
+def process_response(conversation, goal_info, kg, entity_dict, goal_transition, user_name, response):
+
+
+    # fix goal mark problem
+    if response[0] == '[' and response[1] != '1':
+        response = (('[' + str(goal_transition[1][0]) + ']') if len(goal_transition) > 1 else '') \
+                    + response[3:]
+
+    # replace knowledge in response
+    for k in kg:
+        if k[1] in difficult_info_mask.keys():
+            key, value = "'" + difficult_info_mask[k[1]], k[2]
+            if k[0] not in actors and 'restaurant' not in k[0]:
+                key = k[0] + key
+            if False and '生日' == k[1] and ('生日' in response or '出生' in response):
+                if '年' in response:
+                    response = re.sub('[0-9 ]*年[0-9 ]月[0-9 ]*', k[2], response)
+                else:
+                    k[2] = k[2][6:]
+                    response = re.sub('[0-9 ]*月 [0-9]*', k[2], response)
+                continue
+
+            response = response.replace(key, value)
+
+
+    # replacce punctuation
+
+    response = response.replace(',', '，').replace('?', '？').replace('!', '！').replace('°C', '℃')
+    if '气温' in response:
+        response = response.replace(' ， ', ' ,   ').replace('℃ 最', '℃ ,   最').replace('风 最', '风 ,   最')\
+            .replace('好 ,   ', '好 ， ').replace('的 ,   ', '的 ， ').replace('嘿,   ', '嘿 ， ')
+
+
+    # replace user name
+    response = response.replace('name', user_name)
+
+    # replace entity in response
+    for entity, entity_no in zip(entity_dict.keys(), entity_dict.values()):
+        response = response.replace(entity_no, entity)
+
+    if 'movie_1' in response:
+        for k in kg:
+            if k[1] == '主演' and k[0] in actors:
+                response.replace('movie_1', k[2])
+                break
+
+    response = response.replace("身高 'height ", '').replace(' 《 movie_1 》', '')
+    return response
 
 
 if __name__ == '__main__':
@@ -325,8 +422,8 @@ if __name__ == '__main__':
             for k in kg:
                 if k[1] == '主演' and k[0] in actors:
                     response.replace('movie_1', k[2])
-                    print(k[2])
                     break
 
         response = response.replace("身高 'height ", '').replace(' 《 movie_1 》', '')
         print(response.strip(), file=tgt)
+
