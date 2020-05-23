@@ -23,7 +23,7 @@ def get_goal_type_entity(goal):
     flag1 = ["关于明星的聊天", "音乐推荐", "播放音乐", "美食推荐",
              "电影推荐", "音乐点播", "问日期", "提问", "兴趣点推荐"]  # 一个关键词
     flag2 = ["问答"]  # 两个关键词
-    flag_news = ["新闻推荐", "新闻点播"]
+    flag_news = ["新闻推荐", "新闻点播"]    # 新闻
 
     type = goal.split(']', 1)[-1].split('(', 1)[0].replace(' ', '')
 
@@ -67,13 +67,13 @@ def predict_goal(data):
 
     # find candidate entities
     kg = data['knowledge']
-    accept_movies = data['user_profile']['接受 的 电影'] if '接受 的 电影' in data['user_profile'].keys() else {}
+    accept_movies = data['user_profile']['接受的电影'] if '接受的电影' in data['user_profile'].keys() else {}
     accept_movies = [m.replace(' ', '') for m in accept_movies]
-    accept_songs = data['user_profile']['接受 的 音乐'] if '接受 的 音乐' in data['user_profile'].keys() else {}
+    accept_songs = data['user_profile']['接受的音乐'] if '接受的音乐' in data['user_profile'].keys() else {}
     accept_songs = [s.replace(' ', '') for s in accept_songs]
-    like_movies = data['user_profile']['喜欢 的 电影'] if "喜欢 的 电影" in data['user_profile'].keys() else {}
+    like_movies = data['user_profile']['喜欢的电影'] if "喜欢的电影" in data['user_profile'].keys() else {}
     like_movies = [m.replace(' ', '') for m in like_movies]
-    like_songs = data['user_profile']['喜欢 的 音乐'] if "喜欢 的 音乐" in data['user_profile'].keys() else {}
+    like_songs = data['user_profile']['喜欢的音乐'] if "喜欢的音乐" in data['user_profile'].keys() else {}
     like_songs = [s.replace(' ', '') for s in like_songs]
 
     songs = list()
@@ -87,8 +87,8 @@ def predict_goal(data):
     news = ''
     actor = ''
     food = ''
-    if "同意 的 美食" in data['user_profile'].keys():
-        food = data['user_profile']['同意 的 美食'].replace(' ', '')
+    if "同意的美食" in data['user_profile'].keys():
+        food = data['user_profile']['同意的美食'].replace(' ', '')
 
     for j in kg:
         entity, relation, info = j
