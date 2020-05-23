@@ -7,6 +7,7 @@ import argparse
 import goal_filling
 import sacrebleu
 import copy
+import jieba
 
 
 
@@ -60,9 +61,12 @@ def decode_json(i):
     """
     mask_info = dict()
     conversation = i['history'] if 'history' in i.keys() else i['conversation']
+    conversation = [c.replace(i['user_profile']['姓名'], 'name') for c in conversation]  # replace user's name
+    if len(conversation) > 0 and ' ' not in conversation[0]:
+        conversation = [' '.join(jieba.cut(c)).replace('[ 4 ]', '[4]').replace('[ 3 ]', '[3]').replace('[ 2 ]', '[2]').replace('[ 1 ]', '[1]').replace('[ 7 ]', '[7]').replace('[ 6 ]', '[6]').replace('[ 5 ]', '[5]').replace('[ 4 ]', '[4]') for c in conversation]
     if len(conversation) > 0 and conversation[0][0] != '[':
         conversation[0] = '[1] ' + conversation[0]
-    conversation = [c.replace(i['user_profile']['姓名'], 'name') for c in conversation]  # replace user's name
+    
     goal = i['goal'].split('-->')
     if '......' in i['goal']:
         goal_info = goal_filling.fill_test(i)
@@ -90,36 +94,12 @@ def decode_json(i):
     entity_dict = dict()
 
     for gi in range(len(goal_info)):
-
-        if goal_info[gi][1] == '音乐推荐':
-            goal_info[gi][1] = '音乐 推荐'
-        if goal_info[gi][1] == '美食推荐':
-            goal_info[gi][1] = '美食 推荐'
-        if goal_info[gi][1] == '兴趣点推荐':
-            goal_info[gi][1] = '兴趣点 推荐'
-        if goal_info[gi][1] == '电影推荐':
-            goal_info[gi][1] = '电影 推荐'    
-        if goal_info[gi][1] == '播放音乐':
-            goal_info[gi][1] = '播放 音乐'  
-        if goal_info[gi][1] == '音乐点播':
-            goal_info[gi][1] = '音乐 点播' 
-        if goal_info[gi][1] == '问时间':
-            goal_info[gi][1] = '问 时间' 
-        if goal_info[gi][1] == '问日期':
-            goal_info[gi][1] = '问 日期'    
-        if goal_info[gi][1] == '天气信息推送':
-            goal_info[gi][1] = '天气 信息 推送'  
-        if goal_info[gi][1] == '问天气':
-            goal_info[gi][1] = '问 天气'     
-        if goal_info[gi][1] == '关于明星的聊天':
-            goal_info[gi][1] = '关于 明星 的 聊天'    
-
-                
-        if goal_info[gi][1] in ['问 时间', '问 日期']:  # add time in goal
+                  
+        if goal_info[gi][1] in ['问时间', '问日期']:  # add time in goal
             goal_info[gi].append(i['situation'])
             continue
 
-        if goal_info[gi][1] in ['天气 信息 推送', '问 天气']:  # add weather in goal
+        if goal_info[gi][1] in ['天气信息推送', '问天气']:  # add weather in goal
             for k in kg:
                 city, thedate, weather = k
                 if validate_date(thedate):
@@ -127,10 +107,10 @@ def decode_json(i):
                     goal_info[gi].append(weather)
                     break
             continue
-        if len(goal_info[gi]) != 3 or goal_info[gi][1] not in ['美食 推荐', '兴趣点 推荐', '电影 推荐', '播放 音乐', '音乐 推荐', '音乐 点播']:
+        if len(goal_info[gi]) != 3 or goal_info[gi][1] not in ['美食推荐', '兴趣点推荐', '电影推荐', '播放音乐', '音乐推荐', '音乐点播']:
             continue
 
-        if goal_info[gi][1] == '播放 音乐':  # play the last recommend song
+        if goal_info[gi][1] == '播放音乐':  # play the last recommend song
             goal_info[gi][2] = entity_dict[goal_info[gi][2]]
             continue
 
@@ -144,13 +124,13 @@ def decode_json(i):
             if entity in entity_dict.keys():
                 continue
             entity_no = ''
-            if '美食 推荐' == goal_info[gi][1]:
+            if '美食推荐' == goal_info[gi][1]:
                 entity_cnt -= 1
                 entity_no = 'special_' + str(entity_cnt)
-            if '兴趣点 推荐' == goal_info[gi][1]:
+            if '兴趣点推荐' == goal_info[gi][1]:
                 entity_cnt -= 1
                 entity_no = 'restaurant_' + str(entity_cnt)
-            if '电影 推荐' == goal_info[gi][1]:
+            if '电影推荐' == goal_info[gi][1]:
                 entity_cnt -= 1
                 entity_no = 'movie_' + str(entity_cnt)
                 has_acting_knowledge = False
@@ -158,7 +138,7 @@ def decode_json(i):
                     if k[2] == entity and k[1] == '主演':
                         has_acting_knowledge = True
                         break
-            if goal_info[gi][1] in ['音乐 推荐', '音乐 点播']:
+            if goal_info[gi][1] in ['音乐推荐', '音乐点播']:
                 entity_cnt -= 1
                 entity_no = 'song_' + str(entity_cnt)
             if entity_no == '':
@@ -181,7 +161,7 @@ def decode_json(i):
                     if kg[j][0].replace(' ', '') + ':' == kg[j][2].replace(' ', ''):  # avoid comments like
                         # ["亚飞与亚基", "评论", "亚飞与亚基 :"]"
                         continue
-                    if goal_info[gi][1] in ['音乐 推荐', '电影 推荐']:  # collect all comments to this entity
+                    if goal_info[gi][1] in ['音乐推荐', '电影推荐']:  # collect all comments to this entity
                         if len(kg[j][2]) > 4 and kg[j][1] == '评论' and used_comment == '':
                             kg[j][2] = kg[j][2][:88]
                             if str(kg[j]) in select_comments_dict:
@@ -196,7 +176,7 @@ def decode_json(i):
                 goal_info[gi][2] = entity_no
                 continue
             # find which comment is used by calculate sacrebleu
-            if goal_info[gi][1] in ['音乐 推荐', '电影 推荐']:
+            if goal_info[gi][1] in ['音乐推荐', '电影推荐']:
 
                 info_lists.append(['评价', used_comment if used_comment != '' else new_comment])
                 goal_info_enrich.append(info_lists)
@@ -213,13 +193,15 @@ def decode_json(i):
 
 def process_input(i):
 
+    # i = i.replace(' ', '')
     i = json.loads(i)
+    i['goal'] = i['goal'].replace(' ', '')
     conversation, goal_info, kg, entity_dict = decode_json(i)
     goal = i['goal'].split('-->')
 
     if len(conversation) == 0 and '寒暄' in goal[0]:
         hello_info = ['寒暄', i['situation']]
-        if '带 User 名字' in goal[0]:
+        if '带User名字' in goal[0]:
             hello_info.append('name')
             hello_info.append(i['user_profile']['性别'])
             if '年龄区间' in str(i['user_profile']):
@@ -238,9 +220,9 @@ def process_input(i):
 
         # add knowledge of celebrity to goal transition
         # chat about celebrity, add knowledge set that used in training set
-        if (goal_transition[0][1] == '关于 明星 的 聊天' and current_round < 4) or \
-                (1 < len(goal_transition) and current_round >= 2 and goal_transition[1][1] == '关于 明星 的 聊天'):
-            pos = 0 if goal_transition[0][1] == '关于 明星 的 聊天' else 1
+        if (goal_transition[0][1] == '关于明星的聊天' and current_round < 4) or \
+                (1 < len(goal_transition) and current_round >= 2 and goal_transition[1][1] == '关于明星的聊天'):
+            pos = 0 if goal_transition[0][1] == '关于明星的聊天' else 1
             celebrity = goal_transition[pos][2]
             chat = celebrity_chat[celebrity]
             for ks, r in zip(chat.keys(), chat.values()):
@@ -257,20 +239,19 @@ def process_input(i):
         
         input_str = 'φ'.join([str(gstr) for gstr in goal_transition])+'φ'
         j = len(conversation)
-        if 0 < j :  # add history
-            add_history = []
-            pos_h = j - 1
-            delta_goal_stage = 0
-            while len(' '.join(add_history) + conversation[pos_h]) < 128 and pos_h >= 0:
-                add_history.append(conversation[pos_h].strip()[:36])
-                if conversation[pos_h][0] == '[':
-                    add_history[-1] += 'φ'
-                    delta_goal_stage += 1
-                    if delta_goal_stage >= 2:
-                        break
-                pos_h -= 1
+        add_history = []
+        pos_h = j - 1
+        delta_goal_stage = 0
+        while pos_h >= 0 and len(' '.join(add_history) + conversation[pos_h]) < 128:
+            add_history.append(conversation[pos_h].strip()[:36])
+            if conversation[pos_h][0] == '[':
+                #　add_history[-1] += 'φ'
+                delta_goal_stage += 1
+                if delta_goal_stage >= 2:
+                    break
+            pos_h -= 1
             # add_history = [c + ' 。' if c[-1] not in ['！', '？', '。'] else c for c in add_history]
-            input_str += 'φ'.join(add_history[::-1])
+        input_str += 'φ'.join(add_history[::-1])
         return conversation, goal_info, kg, entity_dict, goal_transition, i['user_profile']['姓名'], input_str 
 
 
@@ -320,7 +301,7 @@ def process_response(conversation, goal_info, kg, entity_dict, goal_transition, 
                 response.replace('movie_1', k[2])
                 break
 
-    response = response.replace("身高 'height ", '').replace(' 《 movie_1 》', '')
+    response = response.replace("身高'height ", '').replace('《movie_1》', '')
     return response
 
 
@@ -370,9 +351,9 @@ if __name__ == '__main__':
 
             # add knowledge of celebrity to goal transition
             # chat about celebrity, add knowledge set that used in training set
-            if (goal_transition[0][1] == '关于 明星 的 聊天' and current_round < 4) or \
-                    (1 < len(goal_transition) and current_round >= 2 and goal_transition[1][1] == '关于 明星 的 聊天'):
-                pos = 0 if goal_transition[0][1] == '关于 明星 的 聊天' else 1
+            if (goal_transition[0][1] == '关于明星的聊天' and current_round < 4) or \
+                    (1 < len(goal_transition) and current_round >= 2 and goal_transition[1][1] == '关于明星的聊天'):
+                pos = 0 if goal_transition[0][1] == '关于明星的聊天' else 1
                 celebrity = goal_transition[pos][2]
                 chat = celebrity_chat[celebrity]
                 for ks, r in zip(chat.keys(), chat.values()):
