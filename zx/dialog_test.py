@@ -4,7 +4,7 @@ import regex
 import re
 import datetime
 import argparse
-import goal_fill.goal_filling as goal_filling
+import goal_filling
 import sacrebleu
 import copy
 
@@ -63,18 +63,20 @@ def decode_json(i):
     if len(conversation) > 0 and conversation[0][0] != '[':
         conversation[0] = '[1] ' + conversation[0]
     conversation = [c.replace(i['user_profile']['姓名'], 'name') for c in conversation]  # replace user's name
-    goal = i['goal'].split(' --> ')
+    goal = i['goal'].split('-->')
     if '......' in i['goal']:
         goal_info = goal_filling.fill_test(i)
     else:
         goal_info = [goal_filling.extract_info_from_goal(g) for g in goal]
 
+
     kg = i['knowledge']
 
     for j in range(len(kg)):
         if kg[j][1] == '生日':
-            digits = kg[j][2].split(' - ')
-            kg[j][2] = digits[0] + ' 年 ' + digits[1] + ' 月 ' + digits[2]
+            digits = kg[j][2].split('-')
+            if len(digits) > 2:
+                kg[j][2] = digits[0] + '年' + digits[1] + '月' + digits[2]
         if kg[j][1] == '出生地':
             kg[j][2] = kg[j][2].replace('   ', ' ')
         if kg[j][1] == '导演' and '   ' in kg[j][2]:
@@ -88,6 +90,31 @@ def decode_json(i):
     entity_dict = dict()
 
     for gi in range(len(goal_info)):
+
+        if goal_info[gi][1] == '音乐推荐':
+            goal_info[gi][1] = '音乐 推荐'
+        if goal_info[gi][1] == '美食推荐':
+            goal_info[gi][1] = '美食 推荐'
+        if goal_info[gi][1] == '兴趣点推荐':
+            goal_info[gi][1] = '兴趣点 推荐'
+        if goal_info[gi][1] == '电影推荐':
+            goal_info[gi][1] = '电影 推荐'    
+        if goal_info[gi][1] == '播放音乐':
+            goal_info[gi][1] = '播放 音乐'  
+        if goal_info[gi][1] == '音乐点播':
+            goal_info[gi][1] = '音乐 点播' 
+        if goal_info[gi][1] == '问时间':
+            goal_info[gi][1] = '问 时间' 
+        if goal_info[gi][1] == '问日期':
+            goal_info[gi][1] = '问 日期'    
+        if goal_info[gi][1] == '天气信息推送':
+            goal_info[gi][1] = '天气 信息 推送'  
+        if goal_info[gi][1] == '问天气':
+            goal_info[gi][1] = '问 天气'     
+        if goal_info[gi][1] == '关于明星的聊天':
+            goal_info[gi][1] = '关于 明星 的 聊天'    
+
+                
         if goal_info[gi][1] in ['问 时间', '问 日期']:  # add time in goal
             goal_info[gi].append(i['situation'])
             continue
@@ -100,7 +127,6 @@ def decode_json(i):
                     goal_info[gi].append(weather)
                     break
             continue
-
         if len(goal_info[gi]) != 3 or goal_info[gi][1] not in ['美食 推荐', '兴趣点 推荐', '电影 推荐', '播放 音乐', '音乐 推荐', '音乐 点播']:
             continue
 
@@ -189,7 +215,7 @@ def process_input(i):
 
     i = json.loads(i)
     conversation, goal_info, kg, entity_dict = decode_json(i)
-    goal = i['goal'].split(' --> ')
+    goal = i['goal'].split('-->')
 
     if len(conversation) == 0 and '寒暄' in goal[0]:
         hello_info = ['寒暄', i['situation']]
@@ -316,7 +342,7 @@ if __name__ == '__main__':
     for num, i in enumerate(x):
         i = json.loads(i)
         conversation, goal_info, kg, entity_dict = decode_json(i)
-        goal = i['goal'].split(' --> ')
+        goal = i['goal'].split('-->')
 
         def hello_info():
 

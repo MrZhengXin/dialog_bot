@@ -15,14 +15,14 @@ def fail(data):
     global fail_cnt
     fail_cnt += 1
 
-    goal = data['goal'].split(' --> ')
+    goal = data['goal'].split('-->')
     goal = [j.strip() for j in goal]
     kg = data['knowledge']
     info = {
         'goal': goal,
         'kg': kg
     }
-    # print(json.dumps(info, ensure_ascii=False), file=debug)
+    #print(json.dumps(info, ensure_ascii=False), file=debug)
     bug_movie = set()
     for i in kg:
         if i[1] == '评论' and i[0] not in actors:
@@ -30,7 +30,7 @@ def fail(data):
     for i in kg:
         if '主演' == i[1] and i[2] in bug_movie:
             bug_movie.remove(i[2])
-    print(bug_movie)
+    # print(bug_movie)
 
     return predict_goal(data)
 
@@ -41,7 +41,7 @@ def fill_goal(i):
         Input: a json record
         Output: a list of what's missing in i
     """
-    goal = i['goal'].split(' --> ')
+    goal = i['goal'].split('-->')
     goal = [j.strip() for j in goal]
     if goal[2].startswith('[3] 再见'):  # goal is already complete
         return []
@@ -465,12 +465,39 @@ def fill_goal(i):
         goal_fill = fail(i)
         return goal_fill
 
+def action_space(input_action):
+    if input_action == '音乐推荐':
+        input_action = '音乐 推荐'
+    if input_action == '美食推荐':
+        input_action = '美食 推荐'
+    if input_action == '兴趣点推荐':
+        input_action = '兴趣点 推荐'
+    if input_action == '电影推荐':
+        input_action = '电影 推荐'    
+    if input_action == '播放音乐':
+        input_action = '播放 音乐'  
+    if input_action == '音乐点播':
+        input_action = '音乐 点播' 
+    if input_action == '问时间':
+        input_action = '问 时间' 
+    if input_action == '问日期':
+        input_action = '问 日期'    
+    if input_action == '天气信息推送':
+        input_action = '天气 信息 推送'  
+    if input_action == '问天气':
+        input_action = '问 天气'     
+    if input_action == '关于明星的聊天':
+        input_action = '关于 明星 的 聊天' 
+    return input_action
+
 
 def extract_info_from_goal(goal):
     no = int(goal[1])
-    if '] 再见' in goal:
+    if '] 再见' in goal or ']再见' in goal:
         return [no, '再见']
+    print(re.findall(']\s*([^(]*?)\s*\(', goal), goal)
     action = re.findall(']\s*([^(]*?)\s*\(', goal)[0]
+    action = action_space(action)
     sth = re.findall('『[^』]*』', goal)
     sth = [s[2:-2].replace(" ","") for s in sth]
     if action == '问答':
@@ -515,7 +542,7 @@ def fill_test(i):
 
     goals_fill = fill_goal(i)
     goals = i['goal']
-    goals_info = [extract_info_from_goal(j) for j in goals.split(' --> ')]
+    goals_info = [extract_info_from_goal(j) for j in goals.split('-->')]
     if goals_fill == None:
         return goals_info
     else:
